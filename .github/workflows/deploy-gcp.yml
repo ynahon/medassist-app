@@ -31,7 +31,7 @@ jobs:
 
     steps:
     - name: Checkout
-      uses: actions/checkout@v5
+      uses: actions/checkout@v4
 
     - name: Set environment config
       run: |-
@@ -45,23 +45,30 @@ jobs:
           echo "IMAGE_TAG=medassist-api-dev" >> $GITHUB_ENV
         fi
 
-    - uses: google-github-actions/setup-gcloud@1bee7de035d65ec5da40a31f8589e240eba8fde5
+    - name: Authenticate to Google Cloud
+      uses: google-github-actions/auth@v2
       with:
-        service_account_key: ${{ env.ENV == 'prod' && secrets.GKE_SA_KEY_PROD || secrets.GKE_SA_KEY_DEV }}
+        credentials_json: ${{ env.ENV == 'prod' && secrets.GKE_SA_KEY_PROD || secrets.GKE_SA_KEY_DEV }}
+
+    - name: Set up Cloud SDK
+      uses: google-github-actions/setup-gcloud@v2
+      with:
         project_id: ${{ secrets.GKE_PROJECT }}
 
-    - run: gcloud --quiet auth configure-docker
+    - name: Configure Docker
+      run: gcloud --quiet auth configure-docker
 
-    - uses: google-github-actions/get-gke-credentials@db150f2cc60d1716e61922b832eae71d2a45938f
+    - name: Get GKE credentials
+      uses: google-github-actions/get-gke-credentials@v2
       with:
         cluster_name: ${{ env.GKE_CLUSTER }}
         location: ${{ env.GKE_ZONE }}
-        credentials: ${{ env.ENV == 'prod' && secrets.GKE_SA_KEY_PROD || secrets.GKE_SA_KEY_DEV }}
+        project_id: ${{ secrets.GKE_PROJECT }}
 
-    - name: Build
+    - name: Build Docker image
       run: docker build --tag "gcr.io/$PROJECT_ID/${{ env.IMAGE_TAG }}:$GITHUB_SHA" .
 
-    - name: Publish
+    - name: Push Docker image
       run: docker push "gcr.io/$PROJECT_ID/${{ env.IMAGE_TAG }}:$GITHUB_SHA"
 
     - name: Set up Kustomize
@@ -69,7 +76,7 @@ jobs:
         curl -sfLo kustomize https://github.com/kubernetes-sigs/kustomize/releases/download/v3.1.0/kustomize_3.1.0_linux_amd64
         chmod u+x ./kustomize
 
-    - name: Deploy
+    - name: Deploy to GKE
       run: |-
         ./kustomize edit set image gcr.io/PROJECT_ID/IMAGE:TAG=gcr.io/$PROJECT_ID/${{ env.IMAGE_TAG }}:$GITHUB_SHA
         ./kustomize build . | kubectl apply -f -
