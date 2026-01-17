@@ -18,67 +18,74 @@ on:
 env:
   PROJECT_ID: ${{ secrets.GKE_PROJECT }}
   GKE_ZONE: us-central1-c
-  IMAGE: medassist-api
 
 jobs:
-  setup-build-publish-deploy:
-    name: Setup, Build, Publish, and Deploy
+  deploy-dev:
+    name: Deploy to Dev
     runs-on: ubuntu-latest
-    environment: ${{ github.event.inputs.environment || 'dev' }}
-
-    env:
-      ENV: ${{ github.event.inputs.environment || 'dev' }}
+    if: github.event.inputs.environment == 'dev' || github.event.inputs.environment == ''
+    environment: dev
 
     steps:
-    - name: Checkout
-      uses: actions/checkout@v4
+    - uses: actions/checkout@v4
 
-    - name: Set environment config
-      run: |-
-        if [ "${{ env.ENV }}" == "prod" ]; then
-          echo "GKE_CLUSTER=medassist-cluster-prod" >> $GITHUB_ENV
-          echo "DEPLOYMENT_NAME=medassist-prod" >> $GITHUB_ENV
-          echo "IMAGE_TAG=medassist-api" >> $GITHUB_ENV
-        else
-          echo "GKE_CLUSTER=medassist-cluster-dev" >> $GITHUB_ENV
-          echo "DEPLOYMENT_NAME=medassist-dev" >> $GITHUB_ENV
-          echo "IMAGE_TAG=medassist-api-dev" >> $GITHUB_ENV
-        fi
-
-    - name: Authenticate to Google Cloud
-      uses: google-github-actions/auth@v2
+    - uses: google-github-actions/auth@v2
       with:
-        credentials_json: ${{ env.ENV == 'prod' && secrets.GKE_SA_KEY_PROD || secrets.GKE_SA_KEY_DEV }}
+        credentials_json: ${{ secrets.GKE_SA_KEY_DEV }}
 
-    - name: Set up Cloud SDK
-      uses: google-github-actions/setup-gcloud@v2
+    - uses: google-github-actions/setup-gcloud@v2
+
+    - run: gcloud --quiet auth configure-docker
+
+    - uses: google-github-actions/get-gke-credentials@v2
       with:
-        project_id: ${{ secrets.GKE_PROJECT }}
-
-    - name: Configure Docker
-      run: gcloud --quiet auth configure-docker
-
-    - name: Get GKE credentials
-      uses: google-github-actions/get-gke-credentials@v2
-      with:
-        cluster_name: ${{ env.GKE_CLUSTER }}
+        cluster_name: medassist-cluster-dev
         location: ${{ env.GKE_ZONE }}
-        project_id: ${{ secrets.GKE_PROJECT }}
 
-    - name: Build Docker image
-      run: docker build --tag "gcr.io/$PROJECT_ID/${{ env.IMAGE_TAG }}:$GITHUB_SHA" .
+    - name: Build and Push
+      run: |
+        docker build --tag "gcr.io/$PROJECT_ID/medassist-api-dev:$GITHUB_SHA" .
+        docker push "gcr.io/$PROJECT_ID/medassist-api-dev:$GITHUB_SHA"
 
-    - name: Push Docker image
-      run: docker push "gcr.io/$PROJECT_ID/${{ env.IMAGE_TAG }}:$GITHUB_SHA"
-
-    - name: Set up Kustomize
-      run: |-
+    - name: Deploy
+      run: |
         curl -sfLo kustomize https://github.com/kubernetes-sigs/kustomize/releases/download/v3.1.0/kustomize_3.1.0_linux_amd64
         chmod u+x ./kustomize
-
-    - name: Deploy to GKE
-      run: |-
-        ./kustomize edit set image gcr.io/PROJECT_ID/IMAGE:TAG=gcr.io/$PROJECT_ID/${{ env.IMAGE_TAG }}:$GITHUB_SHA
+        ./kustomize edit set image gcr.io/PROJECT_ID/IMAGE:TAG=gcr.io/$PROJECT_ID/medassist-api-dev:$GITHUB_SHA
         ./kustomize build . | kubectl apply -f -
-        kubectl rollout status deployment/${{ env.DEPLOYMENT_NAME }}
-        kubectl get services -o wide
+        kubectl rollout status deployment/medassist-dev
+
+  deploy-prod:
+    name: Deploy to Prod
+    runs-on: ubuntu-latest
+    if: github.event.inputs.environment == 'prod'
+    environment: prod
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - uses: google-github-actions/auth@v2
+      with:
+        credentials_json: ${{ secrets.GKE_SA_KEY_PROD }}
+
+    - uses: google-github-actions/setup-gcloud@v2
+
+    - run: gcloud --quiet auth configure-docker
+
+    - uses: google-github-actions/get-gke-credentials@v2
+      with:
+        cluster_name: medassist-cluster-prod
+        location: ${{ env.GKE_ZONE }}
+
+    - name: Build and Push
+      run: |
+        docker build --tag "gcr.io/$PROJECT_ID/medassist-api:$GITHUB_SHA" .
+        docker push "gcr.io/$PROJECT_ID/medassist-api:$GITHUB_SHA"
+
+    - name: Deploy
+      run: |
+        curl -sfLo kustomize https://github.com/kubernetes-sigs/kustomize/releases/download/v3.1.0/kustomize_3.1.0_linux_amd64
+        chmod u+x ./kustomize
+        ./kustomize edit set image gcr.io/PROJECT_ID/IMAGE:TAG=gcr.io/$PROJECT_ID/medassist-api:$GITHUB_SHA
+        ./kustomize build . | kubectl apply -f -
+        kubectl rollout status deployment/medassist-prod
