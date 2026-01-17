@@ -1,0 +1,36 @@
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['build', '-t', 'gcr.io/$PROJECT_ID/medassist-api', '.']
+  
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'gcr.io/$PROJECT_ID/medassist-api']
+  
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      - 'run'
+      - 'deploy'
+      - 'medassist-api'
+      - '--image'
+      - 'gcr.io/$PROJECT_ID/medassist-api'
+      - '--region'
+      - '${_REGION}'
+      - '--platform'
+      - 'managed'
+      - '--allow-unauthenticated'
+      - '--add-cloudsql-instances'
+      - '${_INSTANCE_CONNECTION_NAME}'
+      - '--set-env-vars'
+      - 'DATABASE_URL=${_DATABASE_URL},SESSION_SECRET=${_SESSION_SECRET},TWILIO_ACCOUNT_SID=${_TWILIO_ACCOUNT_SID},TWILIO_AUTH_TOKEN=${_TWILIO_AUTH_TOKEN},TWILIO_PHONE_NUMBER=${_TWILIO_PHONE_NUMBER}'
+
+substitutions:
+  _REGION: us-central1
+  _INSTANCE_CONNECTION_NAME: ''
+  _DATABASE_URL: ''
+  _SESSION_SECRET: ''
+  _TWILIO_ACCOUNT_SID: ''
+  _TWILIO_AUTH_TOKEN: ''
+  _TWILIO_PHONE_NUMBER: ''
+
+images:
+  - 'gcr.io/$PROJECT_ID/medassist-api'
