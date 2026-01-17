@@ -23,23 +23,27 @@ jobs:
   deploy-dev:
     name: Deploy to Dev
     runs-on: ubuntu-latest
-    # Logic: Run if it's a push to main OR if manually set to dev
+    # Run on push to main OR if 'dev' is manually selected
     if: github.event_name == 'push' || github.event.inputs.environment == 'dev'
     environment: dev
 
     steps:
     - uses: actions/checkout@v4
 
-    - uses: google-github-actions/auth@v2
+    - name: Authenticate to Google Cloud
+      uses: google-github-actions/auth@v2
       with:
+        # Note: GKE_SA_KEY_DEV must be added as a secret inside the 'dev' Environment
         credentials_json: ${{ secrets.GKE_SA_KEY_DEV }}
 
-    - uses: google-github-actions/setup-gcloud@v2
+    - name: Set up Cloud SDK
+      uses: google-github-actions/setup-gcloud@v2
 
-    # Modern replacement for 'configure-docker'
-    - run: gcloud auth configure-docker gcr.io --quiet
+    - name: Configure Docker
+      run: gcloud --quiet auth configure-docker gcr.io
 
-    - uses: google-github-actions/get-gke-credentials@v2
+    - name: Get GKE Credentials
+      uses: google-github-actions/get-gke-credentials@v2
       with:
         cluster_name: medassist-cluster-dev
         location: ${{ env.GKE_ZONE }}
@@ -49,9 +53,8 @@ jobs:
         docker build --tag "gcr.io/$PROJECT_ID/medassist-api-dev:$GITHUB_SHA" .
         docker push "gcr.io/$PROJECT_ID/medassist-api-dev:$GITHUB_SHA"
 
-    - name: Deploy
+    - name: Deploy to K8s
       run: |
-        # Use built-in kustomize available on ubuntu-latest runners
         kubectl kustomize edit set image gcr.io/PROJECT_ID/IMAGE:TAG=gcr.io/$PROJECT_ID/medassist-api-dev:$GITHUB_SHA
         kubectl apply -k .
         kubectl rollout status deployment/medassist-dev
@@ -59,21 +62,27 @@ jobs:
   deploy-prod:
     name: Deploy to Prod
     runs-on: ubuntu-latest
+    # Only run if 'prod' is explicitly selected in manual trigger
     if: github.event.inputs.environment == 'prod'
     environment: prod
 
     steps:
     - uses: actions/checkout@v4
 
-    - uses: google-github-actions/auth@v2
+    - name: Authenticate to Google Cloud
+      uses: google-github-actions/auth@v2
       with:
+        # Note: GKE_SA_KEY_PROD must be added as a secret inside the 'prod' Environment
         credentials_json: ${{ secrets.GKE_SA_KEY_PROD }}
 
-    - uses: google-github-actions/setup-gcloud@v2
+    - name: Set up Cloud SDK
+      uses: google-github-actions/setup-gcloud@v2
 
-    - run: gcloud auth configure-docker gcr.io --quiet
+    - name: Configure Docker
+      run: gcloud --quiet auth configure-docker gcr.io
 
-    - uses: google-github-actions/get-gke-credentials@v2
+    - name: Get GKE Credentials
+      uses: google-github-actions/get-gke-credentials@v2
       with:
         cluster_name: medassist-cluster-prod
         location: ${{ env.GKE_ZONE }}
@@ -83,7 +92,7 @@ jobs:
         docker build --tag "gcr.io/$PROJECT_ID/medassist-api:$GITHUB_SHA" .
         docker push "gcr.io/$PROJECT_ID/medassist-api:$GITHUB_SHA"
 
-    - name: Deploy
+    - name: Deploy to K8s
       run: |
         kubectl kustomize edit set image gcr.io/PROJECT_ID/IMAGE:TAG=gcr.io/$PROJECT_ID/medassist-api:$GITHUB_SHA
         kubectl apply -k .
