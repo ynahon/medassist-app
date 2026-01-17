@@ -1,0 +1,48 @@
+{
+  "expo": {
+    "name": "MedAssist",
+    "slug": "medassist",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "medassist",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.medassist.app"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#4A90A4",
+        "foregroundImage": "./assets/images/icon.png"
+      },
+      "edgeToEdgeEnabled": true,
+      "predictiveBackGestureEnabled": false,
+      "package": "com.medassist.app"
+    },
+    "web": {
+      "output": "single",
+      "favicon": "./assets/images/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/splash-icon.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#4A90A4",
+          "dark": {
+            "backgroundColor": "#1A3A4A"
+          }
+        }
+      ],
+      "expo-web-browser",
+      "expo-localization"
+    ],
+    "experiments": {
+      "reactCompiler": true
+    }
+  }
+}
