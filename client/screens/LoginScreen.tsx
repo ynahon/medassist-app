@@ -119,7 +119,7 @@ export default function LoginScreen() {
       >
         <Feather name="globe" size={18} color={theme.primary} />
         <ThemedText type="small" style={{ color: theme.primary, marginLeft: Spacing.sm }}>
-          {language === "en" ? "עברית" : "Eng"}
+          {language === "en" ? "עברית" : "English"}
         </ThemedText>
       </Pressable>
 
