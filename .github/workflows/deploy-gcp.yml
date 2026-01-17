@@ -100,7 +100,15 @@ jobs:
 
     - name: Deploy to K8s
       run: |
+        # Move into the directory containing kustomization.yaml
         cd k8s
-        kubectl kustomize edit set image gcr.io/PROJECT_ID/IMAGE:TAG=gcr.io/$PROJECT_ID/medassist-api:$GITHUB_SHA
+        
+        # Update the image placeholder. 
+        # Note: We use the base name 'gcr.io/PROJECT_ID/IMAGE' as defined in your yaml
+        kubectl kustomize edit set image gcr.io/PROJECT_ID/IMAGE=gcr.io/$PROJECT_ID/medassist-api-dev:$GITHUB_SHA
+        
+        # Apply the manifests
         kubectl apply -k .
-        kubectl rollout status deployment/medassist-prod
+        
+        # Wait for the deployment to finish
+        kubectl rollout status deployment/medassist-dev
