@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useNavigation } from "@react-navigation/native";
+import { Feather } from "@expo/vector-icons";
 
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import { ThemedText } from "@/components/ThemedText";
@@ -13,6 +14,7 @@ import { useApp } from "@/contexts/AppContext";
 import { Spacing, BorderRadius } from "@/constants/theme";
 import { OnboardingStackParamList } from "@/navigation/OnboardingNavigator";
 import { normalizePhone } from "@/utils/phoneUtils";
+import { Language } from "@/i18n";
 
 type NavigationProp = NativeStackNavigationProp<OnboardingStackParamList, "Login">;
 
@@ -20,7 +22,7 @@ export default function LoginScreen() {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
   const { theme } = useTheme();
-  const { t, isRTL, checkUserExists } = useApp();
+  const { t, isRTL, checkUserExists, language, setLanguage } = useApp();
   const navigation = useNavigation<NavigationProp>();
 
   const [idNumber, setIdNumber] = useState("");
@@ -94,6 +96,11 @@ export default function LoginScreen() {
     navigation.navigate("Registration");
   };
 
+  const toggleLanguage = () => {
+    const newLang: Language = language === "en" ? "he" : "en";
+    setLanguage(newLang);
+  };
+
   const textAlign = isRTL ? "right" : "left";
 
   return (
@@ -106,6 +113,16 @@ export default function LoginScreen() {
       }}
       scrollIndicatorInsets={{ bottom: insets.bottom }}
     >
+      <Pressable
+        style={[styles.languageToggle, { backgroundColor: theme.backgroundDefault, borderColor: theme.border }]}
+        onPress={toggleLanguage}
+      >
+        <Feather name="globe" size={18} color={theme.primary} />
+        <ThemedText type="small" style={{ color: theme.primary, marginLeft: Spacing.sm }}>
+          {language === "en" ? "עברית" : "English"}
+        </ThemedText>
+      </Pressable>
+
       <ThemedText type="h2" style={[styles.title, { textAlign }]}>
         {t.auth.loginTitle}
       </ThemedText>
@@ -197,6 +214,16 @@ export default function LoginScreen() {
 }
 
 const styles = StyleSheet.create({
+  languageToggle: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-end",
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.lg,
+    borderRadius: BorderRadius.full,
+    borderWidth: 1,
+    marginBottom: Spacing.xl,
+  },
   title: {
     marginBottom: Spacing.sm,
   },
