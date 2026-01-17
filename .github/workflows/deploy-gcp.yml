@@ -17,7 +17,7 @@ on:
 
 env:
   PROJECT_ID: ${{ secrets.GKE_PROJECT }}
-  GKE_ZONE: us-central1-c
+  GKE_ZONE: us-central1
 
 jobs:
   deploy-dev:
