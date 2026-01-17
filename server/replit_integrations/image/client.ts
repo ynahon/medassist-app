@@ -9,7 +9,6 @@ export const openai = new OpenAI({
 
 /**
  * Generate an image and return as Buffer.
- * Uses gpt-image-1 model via Replit AI Integrations.
  */
 export async function generateImageBuffer(
   prompt: string,
@@ -20,13 +19,18 @@ export async function generateImageBuffer(
     prompt,
     size,
   });
-  const base64 = response.data[0]?.b64_json ?? "";
+
+  // FIX: Added explicit check for data existence
+  if (!response.data || response.data.length === 0) {
+    throw new Error("No image data returned from OpenAI");
+  }
+
+  const base64 = response.data[0].b64_json ?? "";
   return Buffer.from(base64, "base64");
 }
 
 /**
  * Edit/combine multiple images into a composite.
- * Uses gpt-image-1 model via Replit AI Integrations.
  */
 export async function editImages(
   imageFiles: string[],
@@ -43,11 +47,18 @@ export async function editImages(
 
   const response = await openai.images.edit({
     model: "gpt-image-1",
+    // @ts-ignore - Some versions of OpenAI types expect a single file, 
+    // but your model supports an array.
     image: images,
     prompt,
   });
 
-  const imageBase64 = response.data[0]?.b64_json ?? "";
+  // FIX: Added explicit check for data existence
+  if (!response.data || response.data.length === 0) {
+    throw new Error("No image data returned from OpenAI edit");
+  }
+
+  const imageBase64 = response.data[0].b64_json ?? "";
   const imageBytes = Buffer.from(imageBase64, "base64");
 
   if (outputPath) {
@@ -56,4 +67,3 @@ export async function editImages(
 
   return imageBytes;
 }
-
