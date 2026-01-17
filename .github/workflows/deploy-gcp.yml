@@ -23,7 +23,8 @@ jobs:
   deploy-dev:
     name: Deploy to Dev
     runs-on: ubuntu-latest
-    if: github.event.inputs.environment == 'dev' || github.event.inputs.environment == ''
+    # Logic: Run if it's a push to main OR if manually set to dev
+    if: github.event_name == 'push' || github.event.inputs.environment == 'dev'
     environment: dev
 
     steps:
@@ -35,7 +36,8 @@ jobs:
 
     - uses: google-github-actions/setup-gcloud@v2
 
-    - run: gcloud --quiet auth configure-docker
+    # Modern replacement for 'configure-docker'
+    - run: gcloud auth configure-docker gcr.io --quiet
 
     - uses: google-github-actions/get-gke-credentials@v2
       with:
@@ -49,10 +51,9 @@ jobs:
 
     - name: Deploy
       run: |
-        curl -sfLo kustomize https://github.com/kubernetes-sigs/kustomize/releases/download/v3.1.0/kustomize_3.1.0_linux_amd64
-        chmod u+x ./kustomize
-        ./kustomize edit set image gcr.io/PROJECT_ID/IMAGE:TAG=gcr.io/$PROJECT_ID/medassist-api-dev:$GITHUB_SHA
-        ./kustomize build . | kubectl apply -f -
+        # Use built-in kustomize available on ubuntu-latest runners
+        kubectl kustomize edit set image gcr.io/PROJECT_ID/IMAGE:TAG=gcr.io/$PROJECT_ID/medassist-api-dev:$GITHUB_SHA
+        kubectl apply -k .
         kubectl rollout status deployment/medassist-dev
 
   deploy-prod:
@@ -70,7 +71,7 @@ jobs:
 
     - uses: google-github-actions/setup-gcloud@v2
 
-    - run: gcloud --quiet auth configure-docker
+    - run: gcloud auth configure-docker gcr.io --quiet
 
     - uses: google-github-actions/get-gke-credentials@v2
       with:
@@ -84,8 +85,6 @@ jobs:
 
     - name: Deploy
       run: |
-        curl -sfLo kustomize https://github.com/kubernetes-sigs/kustomize/releases/download/v3.1.0/kustomize_3.1.0_linux_amd64
-        chmod u+x ./kustomize
-        ./kustomize edit set image gcr.io/PROJECT_ID/IMAGE:TAG=gcr.io/$PROJECT_ID/medassist-api:$GITHUB_SHA
-        ./kustomize build . | kubectl apply -f -
+        kubectl kustomize edit set image gcr.io/PROJECT_ID/IMAGE:TAG=gcr.io/$PROJECT_ID/medassist-api:$GITHUB_SHA
+        kubectl apply -k .
         kubectl rollout status deployment/medassist-prod
