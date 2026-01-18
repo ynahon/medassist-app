@@ -1,0 +1,26 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: default
+
+resources:
+  - ../../base
+
+nameSuffix: -prod
+
+images:
+  - name: gcr.io/PROJECT_ID/IMAGE
+    newName: gcr.io/PROJECT_ID/IMAGE
+    newTag: latest
+
+patches:
+  - target:
+      kind: Deployment
+      name: medassist
+    patch: |
+      - op: replace
+        path: /metadata/name
+        value: medassist-prod
+      - op: replace
+        path: /spec/template/spec/containers/0/name
+        value: medassist-api
