@@ -54,8 +54,8 @@ jobs:
     - name: Deploy to K8s
       run: |
         cd k8s
-        # FIXED: Removed ':TAG' from the search string to match your kustomization.yaml placeholder
-        kubectl kustomize edit set image gcr.io/PROJECT_ID/IMAGE=gcr.io/$PROJECT_ID/medassist-api-dev:$GITHUB_SHA
+        # We add the '.' at the end to tell kubectl exactly where the kustomization.yaml is
+        kubectl kustomize edit set image gcr.io/PROJECT_ID/IMAGE=gcr.io/$PROJECT_ID/medassist-api-dev:$GITHUB_SHA .
         kubectl apply -k .
         kubectl rollout status deployment/medassist-dev
 
@@ -93,7 +93,7 @@ jobs:
     - name: Deploy to K8s
       run: |
         cd k8s
-        # FIXED: Ensure search string matches exactly what is in k8s/kustomization.yaml
-        kubectl kustomize edit set image gcr.io/PROJECT_ID/IMAGE=gcr.io/$PROJECT_ID/medassist-api:$GITHUB_SHA
+        # We add the '.' at the end here as well
+        kubectl kustomize edit set image gcr.io/PROJECT_ID/IMAGE=gcr.io/$PROJECT_ID/medassist-api:$GITHUB_SHA .
         kubectl apply -k .
         kubectl rollout status deployment/medassist-prod
