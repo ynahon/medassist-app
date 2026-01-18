@@ -1,0 +1,19 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: medassist
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: medassist
+  template:
+    metadata:
+      labels:
+        app: medassist
+    spec:
+      containers:
+        - name: medassist-api
+          image: gcr.io/PROJECT_ID/IMAGE:latest
+          ports:
+            - containerPort: 8080
