@@ -54,10 +54,9 @@ jobs:
       - name: Deploy to K8s (Dev)
         run: |
           cd k8s/overlays/dev
-          # FIX: No trailing dot here
           kustomize edit set image gcr.io/PROJECT_ID/IMAGE=gcr.io/$PROJECT_ID/medassist-api-dev:$GITHUB_SHA
           kubectl apply -k .
-          kubectl rollout status deployment/medassist-dev
+          kubectl rollout status deployment/medassist-dev --timeout=5m
 
   deploy-prod:
     name: Deploy to Prod
@@ -93,7 +92,6 @@ jobs:
       - name: Deploy to K8s (Prod)
         run: |
           cd k8s/overlays/prod
-          # FIX: No trailing dot here
           kustomize edit set image gcr.io/PROJECT_ID/IMAGE=gcr.io/$PROJECT_ID/medassist-api:$GITHUB_SHA
           kubectl apply -k .
-          kubectl rollout status deployment/medassist-prod
+          kubectl rollout status deployment/medassist-prod --timeout=5m

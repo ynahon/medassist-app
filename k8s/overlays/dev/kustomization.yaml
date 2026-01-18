@@ -19,8 +19,5 @@ patches:
       name: medassist
     patch: |
       - op: replace
-        path: /metadata/name
-        value: medassist-dev
-      - op: replace
         path: /spec/template/spec/containers/0/name
         value: medassist-api-dev
