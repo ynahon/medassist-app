@@ -17,14 +17,12 @@ on:
 
 env:
   PROJECT_ID: ${{ secrets.GKE_PROJECT }}
-  # Updated to match your Regional Autopilot cluster location
   GKE_REGION: us-central1 
 
 jobs:
   deploy-dev:
     name: Deploy to Dev
     runs-on: ubuntu-latest
-    # Run on push to main OR if 'dev' is manually selected
     if: github.event_name == 'push' || github.event.inputs.environment == 'dev'
     environment: dev
 
@@ -34,7 +32,6 @@ jobs:
     - name: Authenticate to Google Cloud
       uses: google-github-actions/auth@v2
       with:
-        # Credentials must be in the 'dev' environment secrets in GitHub
         credentials_json: ${{ secrets.GKE_SA_KEY_DEV }}
 
     - name: Set up Cloud SDK
@@ -56,19 +53,15 @@ jobs:
 
     - name: Deploy to K8s
       run: |
-        # Move into the directory containing kustomization.yaml
         cd k8s
-        # Update the image placeholder with the newly built image tag
-        kubectl kustomize edit set image gcr.io/PROJECT_ID/IMAGE:TAG=gcr.io/$PROJECT_ID/medassist-api-dev:$GITHUB_SHA
-        # Apply the manifests
+        # FIXED: Removed ':TAG' from the search string to match your kustomization.yaml placeholder
+        kubectl kustomize edit set image gcr.io/PROJECT_ID/IMAGE=gcr.io/$PROJECT_ID/medassist-api-dev:$GITHUB_SHA
         kubectl apply -k .
-        # Wait for the deployment to finish
         kubectl rollout status deployment/medassist-dev
 
   deploy-prod:
     name: Deploy to Prod
     runs-on: ubuntu-latest
-    # Only run if 'prod' is explicitly selected in manual trigger
     if: github.event.inputs.environment == 'prod'
     environment: prod
 
@@ -78,7 +71,6 @@ jobs:
     - name: Authenticate to Google Cloud
       uses: google-github-actions/auth@v2
       with:
-        # Credentials must be in the 'prod' environment secrets in GitHub
         credentials_json: ${{ secrets.GKE_SA_KEY_PROD }}
 
     - name: Set up Cloud SDK
@@ -100,15 +92,8 @@ jobs:
 
     - name: Deploy to K8s
       run: |
-        # 1. Enter the directory
         cd k8s
-        
-        # 2. Correct syntax: [OLD_IMAGE_NAME]=[NEW_IMAGE_NAME]:[TAG]
-        # Remove ':TAG' from the search string
-        kubectl kustomize edit set image gcr.io/PROJECT_ID/IMAGE=gcr.io/$PROJECT_ID/medassist-api-dev:$GITHUB_SHA
-        
-        # 3. Apply the directory
+        # FIXED: Ensure search string matches exactly what is in k8s/kustomization.yaml
+        kubectl kustomize edit set image gcr.io/PROJECT_ID/IMAGE=gcr.io/$PROJECT_ID/medassist-api:$GITHUB_SHA
         kubectl apply -k .
-        
-        # 4. Rollout check
-        kubectl rollout status deployment/medassist-dev
+        kubectl rollout status deployment/medassist-prod
