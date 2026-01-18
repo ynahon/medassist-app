@@ -3,12 +3,11 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm install 
 
-COPY tsconfig.json ./
+COPY tsconfig.server.json ./
 COPY server ./server
 COPY shared ./shared
 
-# Added --skipLibCheck and specifically targeting the server to ignore client errors
-RUN npx tsc --outDir dist --skipLibCheck --noEmitOnError false
+RUN npx tsc --project tsconfig.server.json
 
 FROM node:20-alpine
 WORKDIR /app
