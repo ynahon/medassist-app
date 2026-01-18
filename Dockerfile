@@ -1,26 +1,36 @@
+# ---- Build stage ----
 FROM node:20-alpine AS builder
 WORKDIR /app
-COPY package*.json ./
-# Use install to handle potential lockfile mismatches
-RUN npm install 
 
+COPY package*.json ./
+RUN npm ci
+
+# Copy sources
 COPY tsconfig.json ./
 COPY server ./server
 COPY shared ./shared
 
-# Force build and ensure dist exists. 
-# --noEmitOnError false ensures that JS files are created even if there are minor type warnings.
-RUN npx tsc --outDir dist --noEmitOnError false || (mkdir -p dist && echo "Build failed but continuing")
+# Build: force output to dist/ and keep folder structure starting at /app
+# This guarantees dist/server/... exists if your entry is server/index.ts
+RUN npx tsc \
+  --project tsconfig.json \
+  --outDir dist \
+  --rootDir . \
+  --noEmitOnError false
 
+# ---- Runtime stage ----
 FROM node:20-alpine
 WORKDIR /app
-COPY package*.json ./
-RUN npm install --only=production
-COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/server ./server
-COPY --from=builder /app/shared ./shared
-
 ENV NODE_ENV=production
 ENV PORT=8080
+
+COPY package*.json ./
+RUN npm ci --omit=dev && npm cache clean --force
+
+COPY --from=builder /app/dist ./dist
+
 EXPOSE 8080
+
+# IMPORTANT: set this to the real compiled entry file
+# Most common for server/index.ts with --rootDir . is:
 CMD ["node", "dist/server/index.js"]
