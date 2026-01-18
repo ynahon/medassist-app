@@ -10,10 +10,11 @@ import { otpCodes } from "../shared/schema";
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY || "");
 const geminiModel = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
-const twilioClient = twilio(
-  process.env.TWILIO_ACCOUNT_SID,
-  process.env.TWILIO_AUTH_TOKEN
-);
+// Only initialize Twilio if credentials are configured
+const twilioEnabled = !!(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && process.env.TWILIO_PHONE_NUMBER);
+const twilioClient = twilioEnabled 
+  ? twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN)
+  : null;
 
 function generateOTP(): string {
   return Math.floor(100000 + Math.random() * 900000).toString();
@@ -114,6 +115,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         code: otp,
         expiresAt,
       });
+
+      // If Twilio is not configured, use dev mode
+      if (!twilioClient) {
+        console.log(`[DEV MODE] Twilio not configured. OTP for ${normalizedPhone}: ${otp}`);
+        return res.json({ 
+          success: true, 
+          message: "OTP sent (dev mode - check screen for code)", 
+          devCode: otp 
+        });
+      }
 
       try {
         await twilioClient.messages.create({

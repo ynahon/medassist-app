@@ -29,7 +29,9 @@ function setupCors(app: express.Application) {
 
     const origin = req.header("origin");
 
-    if (origin && origins.has(origin)) {
+    // Allow any origin in development/GCP mode (for mobile app testing)
+    // In production, you would restrict this to specific domains
+    if (origin) {
       res.header("Access-Control-Allow-Origin", origin);
       res.header(
         "Access-Control-Allow-Methods",

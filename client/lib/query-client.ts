@@ -1,17 +1,28 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
 
 /**
- * Gets the base URL for the Express API server (e.g., "http://localhost:3000")
+ * Gets the base URL for the Express API server
+ * Set EXPO_PUBLIC_USE_GCP=true to use Google Cloud backend
  * @returns {string} The API base URL
  */
 export function getApiUrl(): string {
-  let host = process.env.EXPO_PUBLIC_DOMAIN;
+  const useGcp = process.env.EXPO_PUBLIC_USE_GCP === "true";
+  const gcpHost = process.env.EXPO_PUBLIC_GCP_DOMAIN;
+  const localHost = process.env.EXPO_PUBLIC_DOMAIN;
 
-  if (!host) {
-    throw new Error("EXPO_PUBLIC_DOMAIN is not set");
+  let host: string;
+  
+  if (useGcp && gcpHost) {
+    host = gcpHost;
+  } else if (localHost) {
+    host = localHost;
+  } else {
+    throw new Error("No API domain configured");
   }
 
-  let url = new URL(`https://${host}`);
+  // Use HTTP for IP addresses, HTTPS for domains
+  const protocol = host.match(/^\d+\.\d+\.\d+\.\d+/) ? "http" : "https";
+  let url = new URL(`${protocol}://${host}`);
 
   return url.href;
 }
