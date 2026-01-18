@@ -1,4 +1,4 @@
-import { type User, type InsertUser, users, type GenderType } from "@shared/schema";
+import { type User, type InsertUser, users, type GenderType } from "../shared/schema";
 import { db } from "./db";
 import { eq } from "drizzle-orm";
 import { createHash } from "crypto";
