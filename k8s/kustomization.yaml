@@ -1,7 +1,0 @@
-resources:
-  - deployment.yaml
-  - service.yaml
-
-images:
-  - name: gcr.io/PROJECT_ID/IMAGE
-    newName: gcr.io/medassist-484313/medassist-api-dev
