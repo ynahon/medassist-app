@@ -54,7 +54,7 @@ jobs:
       - name: Deploy to K8s (Dev)
         run: |
           # IMPORTANT: no trailing '.' here
-          kubectl kustomize edit set image gcr.io/PROJECT_ID/IMAGE=gcr.io/$PROJECT_ID/medassist-api-dev:$GITHUB_SHA --reorder=legacy
+          kubectl kustomize edit set image gcr.io/PROJECT_ID/IMAGE=gcr.io/$PROJECT_ID/medassist-api-dev:$GITHUB_SHA
           # The command above edits kustomization.yaml in the *current directory*,
           # so we run it inside the overlay directory:
         working-directory: k8s/overlays/dev
@@ -98,7 +98,7 @@ jobs:
       - name: Deploy to K8s (Prod)
         run: |
           # IMPORTANT: no trailing '.' here
-          kubectl kustomize edit set image gcr.io/PROJECT_ID/IMAGE=gcr.io/$PROJECT_ID/medassist-api:$GITHUB_SHA --reorder=legacy
+          kubectl kustomize edit set image gcr.io/PROJECT_ID/IMAGE=gcr.io/$PROJECT_ID/medassist-api:$GITHUB_SHA
         working-directory: k8s/overlays/prod
 
       - name: Apply (Prod)
