@@ -72,7 +72,8 @@ jobs:
 
       - name: Build and Push
         run: |
-          docker build --tag "gcr.io/$PROJECT_ID/medassist-api-dev:$GITHUB_SHA" .
+          echo "Building with version: $(cat server/version.txt)"
+          docker build --no-cache --tag "gcr.io/$PROJECT_ID/medassist-api-dev:$GITHUB_SHA" .
           docker push "gcr.io/$PROJECT_ID/medassist-api-dev:$GITHUB_SHA"
 
       - name: Deploy to K8s (Dev)
