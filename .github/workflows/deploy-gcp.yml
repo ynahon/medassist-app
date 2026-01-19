@@ -81,7 +81,7 @@ jobs:
           cd k8s/overlays/dev
           kustomize edit set image gcr.io/PROJECT_ID/IMAGE=gcr.io/$PROJECT_ID/medassist-api-dev:$GITHUB_SHA
           kubectl apply -k .
-          kubectl rollout status deployment/medassist-dev -n medassist-dev --timeout=5m
+          kubectl rollout status deployment/medassist-dev -n medassist-dev --timeout=10m
 
   deploy-prod:
     name: Deploy to Prod
@@ -119,4 +119,4 @@ jobs:
           cd k8s/overlays/prod
           kustomize edit set image gcr.io/PROJECT_ID/IMAGE=gcr.io/$PROJECT_ID/medassist-api:$GITHUB_SHA
           kubectl apply -k .
-          kubectl rollout status deployment/medassist-prod -n medassist-prod --timeout=5m
+          kubectl rollout status deployment/medassist-prod -n medassist-prod --timeout=10m
