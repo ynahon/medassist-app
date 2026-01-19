@@ -14,7 +14,7 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm install --only=production
 COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/server/templates ./server/templates
+COPY server/version.txt ./server/version.txt
 
 ENV NODE_ENV=production
 ENV PORT=8080
