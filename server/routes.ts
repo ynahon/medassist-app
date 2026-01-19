@@ -1,11 +1,22 @@
 import type { Express } from "express";
 import { createServer, type Server } from "node:http";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import twilio from "twilio";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { eq } from "drizzle-orm";
 import documentRoutes, { getDocumentsForRecommendations } from "./documentRoutes";
 import { storage, hashIdNumber, db } from "./storage";
 import { otpCodes } from "../shared/schema";
+
+function getVersion(): string {
+  try {
+    const versionPath = resolve(process.cwd(), "server", "version.txt");
+    return readFileSync(versionPath, "utf-8").trim();
+  } catch {
+    return "0.0.0";
+  }
+}
 
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY || "");
 const geminiModel = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
@@ -90,6 +101,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/health", (_req, res) => {
     res.json({
       status: "ok",
+      version: getVersion(),
       timestamp: new Date().toISOString(),
       uptime: process.uptime(),
       service: "medassist-api",
