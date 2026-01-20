@@ -2,6 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: medassist
+  namespace: medassist-dev
 spec:
   replicas: 1
   strategy:
@@ -30,20 +31,11 @@ spec:
                   key: DATABASE_URL
             - name: NODE_ENV
               value: "production"
-            - name: NODE_EXTRA_CA_CERTS
-              value: /etc/ssl/certs/server-ca.pem
-          volumeMounts:
-            - name: cloud-sql-cert
-              mountPath: /etc/ssl/certs/server-ca.pem
-              subPath: server-ca.pem
-              readOnly: true
           readinessProbe:
             httpGet:
               path: /health
               port: 8080
             initialDelaySeconds: 5
-            periodSeconds: 5
-            failureThreshold: 3
           livenessProbe:
             httpGet:
               path: /health
@@ -51,7 +43,10 @@ spec:
             initialDelaySeconds: 10
             periodSeconds: 10
             failureThreshold: 3
-      volumes:
-        - name: cloud-sql-cert
-          secret:
-            secretName: cloud-sql-ca-cert
+        - name: cloud-sql-proxy
+          image: gcr.io/cloud-sql-connectors/cloud-sql-proxy:2.8.1
+          args:
+            - "--port=5432"
+            - "medassist-484313:us-central1:medassist"
+          securityContext:
+            runAsNonRoot: true
