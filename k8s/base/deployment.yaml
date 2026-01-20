@@ -30,6 +30,13 @@ spec:
                   key: DATABASE_URL
             - name: NODE_ENV
               value: "production"
+            - name: NODE_EXTRA_CA_CERTS
+              value: /etc/ssl/certs/server-ca.pem
+          volumeMounts:
+            - name: cloud-sql-cert
+              mountPath: /etc/ssl/certs/server-ca.pem
+              subPath: server-ca.pem
+              readOnly: true
           readinessProbe:
             httpGet:
               path: /health
@@ -44,3 +51,7 @@ spec:
             initialDelaySeconds: 10
             periodSeconds: 10
             failureThreshold: 3
+      volumes:
+        - name: cloud-sql-cert
+          secret:
+            secretName: cloud-sql-ca-cert

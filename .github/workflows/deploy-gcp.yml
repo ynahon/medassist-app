@@ -70,6 +70,14 @@ jobs:
           cluster_name: medassist-cluster-dev
           location: ${{ env.GKE_REGION }}
 
+      # Create DEV Cloud SQL CA Certificate Secret
+      - name: Create Cloud SQL CA Certificate Secret (Dev)
+        run: |
+          kubectl create secret generic cloud-sql-ca-cert \
+            --from-file=server-ca.pem=k8s/certificates/server-ca-dev.pem \
+            -n medassist-dev \
+            --dry-run=client -o yaml | kubectl apply -f -
+
       - name: Build and Push
         run: |
           echo "Building with version: $(cat server/version.txt)"
@@ -108,6 +116,14 @@ jobs:
         with:
           cluster_name: medassist-cluster-prod
           location: ${{ env.GKE_REGION }}
+
+      # Create PROD Cloud SQL CA Certificate Secret
+      - name: Create Cloud SQL CA Certificate Secret (Prod)
+        run: |
+          kubectl create secret generic cloud-sql-ca-cert \
+            --from-file=server-ca.pem=k8s/certificates/server-ca-prod.pem \
+            -n medassist-prod \
+            --dry-run=client -o yaml | kubectl apply -f -
 
       - name: Build and Push
         run: |
