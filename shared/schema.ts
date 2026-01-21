@@ -45,6 +45,29 @@ export type DocType = (typeof docTypeEnum)[number];
 export const extractionStatusEnum = ["PENDING", "PROCESSING", "SUCCESS", "FAILED"] as const;
 export type ExtractionStatus = (typeof extractionStatusEnum)[number];
 
+export const surveys = pgTable("surveys", {
+  id: varchar("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull(),
+  feeling: text("feeling").notNull(),
+  symptoms: text("symptoms").notNull(), // JSON array stored as text
+  timing: text("timing").notNull(),
+  painLevel: integer("pain_level").notNull(),
+  notes: text("notes"),
+  date: timestamp("date").default(sql`CURRENT_TIMESTAMP`).notNull(),
+  deletedAt: timestamp("deleted_at"),
+});
+
+export const insertSurveySchema = createInsertSchema(surveys).omit({
+  id: true,
+  date: true,
+  deletedAt: true,
+});
+
+export type InsertSurvey = z.infer<typeof insertSurveySchema>;
+export type Survey = typeof surveys.$inferSelect;
+
 export const medicalDocuments = pgTable("medical_documents", {
   id: varchar("id")
     .primaryKey()

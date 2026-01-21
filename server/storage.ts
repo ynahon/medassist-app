@@ -1,6 +1,6 @@
-import { type User, type InsertUser, users, type GenderType } from "../shared/schema";
+import { type User, type InsertUser, users, type GenderType, surveys, type Survey, type InsertSurvey } from "../shared/schema";
 import { db } from "./db";
-import { eq } from "drizzle-orm";
+import { eq, desc, isNull } from "drizzle-orm";
 import { createHash } from "crypto";
 
 export { db };
@@ -12,6 +12,9 @@ export interface IStorage {
   getUserByHashedId(hashedIdNumber: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
   updateUserDemographics(id: string, demographics: { dateOfBirth?: string; gender?: GenderType }): Promise<User | undefined>;
+  getSurveysByUserId(userId: string): Promise<Survey[]>;
+  createSurvey(survey: InsertSurvey): Promise<Survey>;
+  deleteSurvey(surveyId: string): Promise<Survey | undefined>;
 }
 
 export function hashIdNumber(idNumber: string): string {
@@ -58,6 +61,29 @@ export class DatabaseStorage implements IStorage {
     
     const [user] = await db.update(users).set(updateData).where(eq(users.id, id)).returning();
     return user;
+  }
+
+  async getSurveysByUserId(userId: string): Promise<Survey[]> {
+    const userSurveys = await db
+      .select()
+      .from(surveys)
+      .where(eq(surveys.userId, userId))
+      .orderBy(desc(surveys.date));
+    return userSurveys;
+  }
+
+  async createSurvey(survey: InsertSurvey): Promise<Survey> {
+    const [newSurvey] = await db.insert(surveys).values(survey as any).returning();
+    return newSurvey;
+  }
+
+  async deleteSurvey(surveyId: string): Promise<Survey | undefined> {
+    const [survey] = await db
+      .update(surveys)
+      .set({ deletedAt: new Date() })
+      .where(eq(surveys.id, surveyId))
+      .returning();
+    return survey;
   }
 }
 

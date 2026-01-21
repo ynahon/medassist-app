@@ -306,6 +306,64 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Survey endpoints
+  app.get("/api/surveys/:userId", async (req, res) => {
+    try {
+      const { userId } = req.params;
+      const userSurveys = await storage.getSurveysByUserId(userId);
+      res.json({ surveys: userSurveys });
+    } catch (error) {
+      console.error("Get surveys error:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.post("/api/surveys", async (req, res) => {
+    try {
+      const { userId, feeling, symptoms, timing, painLevel, notes } = req.body;
+
+      if (!userId || !feeling || !timing || painLevel === undefined) {
+        return res.status(400).json({ error: "Missing required fields" });
+      }
+
+      const survey = await storage.createSurvey({
+        userId,
+        feeling,
+        symptoms: JSON.stringify(symptoms || []),
+        timing,
+        painLevel,
+        notes: notes || null,
+      });
+
+      res.json({
+        success: true,
+        survey: {
+          ...survey,
+          symptoms: JSON.parse(survey.symptoms),
+        },
+      });
+    } catch (error) {
+      console.error("Create survey error:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.delete("/api/surveys/:surveyId", async (req, res) => {
+    try {
+      const { surveyId } = req.params;
+      const survey = await storage.deleteSurvey(surveyId);
+      
+      if (!survey) {
+        return res.status(404).json({ error: "Survey not found" });
+      }
+
+      res.json({ success: true, survey });
+    } catch (error) {
+      console.error("Delete survey error:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
   app.use("/api/medical-documents", documentRoutes);
 
   app.post("/api/recommendations/generate", async (req, res) => {

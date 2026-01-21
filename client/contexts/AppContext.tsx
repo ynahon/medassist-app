@@ -152,7 +152,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
         savedLanguage,
         savedLanguageSelected,
         savedUser,
-        savedSurveys,
         savedRecommendations,
         savedOnboarding,
         savedNotifications,
@@ -161,7 +160,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
         AsyncStorage.getItem(STORAGE_KEYS.LANGUAGE),
         AsyncStorage.getItem(STORAGE_KEYS.LANGUAGE_SELECTED),
         AsyncStorage.getItem(STORAGE_KEYS.USER),
-        AsyncStorage.getItem(STORAGE_KEYS.SURVEYS),
         AsyncStorage.getItem(STORAGE_KEYS.RECOMMENDATIONS),
         AsyncStorage.getItem(STORAGE_KEYS.ONBOARDING_COMPLETE),
         AsyncStorage.getItem(STORAGE_KEYS.NOTIFICATIONS_ENABLED),
@@ -179,8 +177,30 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (savedLanguageSelected === "true") {
         setHasSelectedLanguage(true);
       }
-      if (savedUser) setUserState(JSON.parse(savedUser));
-      if (savedSurveys) setSurveys(JSON.parse(savedSurveys));
+      if (savedUser) {
+        const parsedUser = JSON.parse(savedUser);
+        setUserState(parsedUser);
+        // Load surveys from server for logged-in user
+        try {
+          const response = await apiRequest("GET", `/api/surveys/${parsedUser.id}`);
+          const data = await response.json();
+          if (data.surveys) {
+            const mappedSurveys: SurveyResponse[] = data.surveys.map((s: any) => ({
+              id: s.id,
+              date: s.date,
+              feeling: s.feeling,
+              symptoms: typeof s.symptoms === 'string' ? JSON.parse(s.symptoms) : s.symptoms,
+              timing: s.timing,
+              painLevel: s.painLevel,
+              notes: s.notes,
+              deletedAt: s.deletedAt,
+            }));
+            setSurveys(mappedSurveys);
+          }
+        } catch (surveyError) {
+          console.error("Error loading surveys from server:", surveyError);
+        }
+      }
       if (savedRecommendations) setRecommendations(JSON.parse(savedRecommendations));
       if (savedOnboarding) setOnboardingCompleteState(savedOnboarding === "true");
       if (savedNotifications !== null) setNotificationsEnabledState(savedNotifications === "true");
@@ -292,6 +312,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setUserState(foundUser);
       setOnboardingCompleteState(true);
 
+      // Load surveys from server after login
+      try {
+        const surveysResponse = await apiRequest("GET", `/api/surveys/${foundUser.id}`);
+        const surveysData = await surveysResponse.json();
+        if (surveysData.surveys) {
+          const mappedSurveys: SurveyResponse[] = surveysData.surveys.map((s: any) => ({
+            id: s.id,
+            date: s.date,
+            feeling: s.feeling,
+            symptoms: typeof s.symptoms === 'string' ? JSON.parse(s.symptoms) : s.symptoms,
+            timing: s.timing,
+            painLevel: s.painLevel,
+            notes: s.notes,
+            deletedAt: s.deletedAt,
+          }));
+          setSurveys(mappedSurveys);
+        }
+      } catch (surveyError) {
+        console.error("Error loading surveys after login:", surveyError);
+      }
+
       return { success: true, user: foundUser };
     } catch (error) {
       console.error("Error logging in:", error);
@@ -328,35 +369,70 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const addSurvey = useCallback(async (surveyData: Omit<SurveyResponse, "id" | "date">) => {
+  const loadSurveysFromServer = useCallback(async (userId: string) => {
     try {
-      const newSurvey: SurveyResponse = {
+      const response = await apiRequest("GET", `/api/surveys/${userId}`);
+      const data = await response.json();
+      if (data.surveys) {
+        const mappedSurveys: SurveyResponse[] = data.surveys.map((s: any) => ({
+          id: s.id,
+          date: s.date,
+          feeling: s.feeling,
+          symptoms: typeof s.symptoms === 'string' ? JSON.parse(s.symptoms) : s.symptoms,
+          timing: s.timing,
+          painLevel: s.painLevel,
+          notes: s.notes,
+          deletedAt: s.deletedAt,
+        }));
+        setSurveys(mappedSurveys);
+      }
+    } catch (error) {
+      console.error("Error loading surveys from server:", error);
+    }
+  }, []);
+
+  const addSurvey = useCallback(async (surveyData: Omit<SurveyResponse, "id" | "date">) => {
+    if (!user) return;
+    try {
+      const response = await apiRequest("POST", "/api/surveys", {
+        userId: user.id,
         ...surveyData,
-        id: Date.now().toString(),
-        date: new Date().toISOString(),
-      };
-      const updatedSurveys = [newSurvey, ...surveys];
-      await AsyncStorage.setItem(STORAGE_KEYS.SURVEYS, JSON.stringify(updatedSurveys));
-      setSurveys(updatedSurveys);
+      });
+      const data = await response.json();
+      if (data.success && data.survey) {
+        const newSurvey: SurveyResponse = {
+          id: data.survey.id,
+          date: data.survey.date,
+          feeling: data.survey.feeling,
+          symptoms: data.survey.symptoms,
+          timing: data.survey.timing,
+          painLevel: data.survey.painLevel,
+          notes: data.survey.notes,
+          deletedAt: data.survey.deletedAt,
+        };
+        setSurveys(prev => [newSurvey, ...prev]);
+      }
     } catch (error) {
       console.error("Error adding survey:", error);
     }
-  }, [surveys]);
+  }, [user]);
 
   const deleteSurvey = useCallback(async (surveyId: string) => {
     try {
-      const updatedSurveys = surveys.map((survey) => {
-        if (survey.id === surveyId) {
-          return { ...survey, deletedAt: new Date().toISOString() };
-        }
-        return survey;
-      });
-      await AsyncStorage.setItem(STORAGE_KEYS.SURVEYS, JSON.stringify(updatedSurveys));
-      setSurveys(updatedSurveys);
+      const response = await apiRequest("DELETE", `/api/surveys/${surveyId}`);
+      const data = await response.json();
+      if (data.success) {
+        setSurveys(prev => prev.map((survey) => {
+          if (survey.id === surveyId) {
+            return { ...survey, deletedAt: new Date().toISOString() };
+          }
+          return survey;
+        }));
+      }
     } catch (error) {
       console.error("Error deleting survey:", error);
     }
-  }, [surveys]);
+  }, []);
 
   const setHideNotNeeded = useCallback(async (hide: boolean) => {
     try {
@@ -478,7 +554,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
       await Promise.all([
         AsyncStorage.removeItem(STORAGE_KEYS.USER),
-        AsyncStorage.removeItem(STORAGE_KEYS.SURVEYS),
         AsyncStorage.removeItem(STORAGE_KEYS.RECOMMENDATIONS),
         AsyncStorage.removeItem(STORAGE_KEYS.ONBOARDING_COMPLETE),
         AsyncStorage.removeItem(STORAGE_KEYS.NOTIFICATIONS_ENABLED),
