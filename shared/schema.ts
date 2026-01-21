@@ -57,6 +57,7 @@ export const surveys = pgTable("surveys", {
   notes: text("notes"),
   date: timestamp("date").default(sql`CURRENT_TIMESTAMP`).notNull(),
   deletedAt: timestamp("deleted_at"),
+  source: text("source").default("mobile"), // New column: tracks where survey was submitted from
 });
 
 export const insertSurveySchema = createInsertSchema(surveys).omit({
