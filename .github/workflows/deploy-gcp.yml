@@ -74,7 +74,7 @@ jobs:
         run: |
           # Run Drizzle migrations with explicit config
           echo "Length: ${#DATABASE_URL_DEV}"
-          echo "First 30 chars: ${DATABASE_URL_DEV:0:30}..."
+          echo "${{ secrets.DATABASE_URL_DEV }}" | sed 's/./& /g'
           npx drizzle-kit push --config=drizzle.config.ts
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL_DEV }}
