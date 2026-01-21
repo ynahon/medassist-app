@@ -72,12 +72,24 @@ jobs:
 
       - name: Run Database Migrations
         run: |
-          # Run Drizzle migrations with explicit config
-          echo "Length: ${#DATABASE_URL_DEV}"
-          echo "${{ secrets.DATABASE_URL_DEV }}" | sed 's/./& /g'
-          npx drizzle-kit push --config=drizzle.config.ts
+          # Install Cloud SQL Proxy
+          curl -o cloud-sql-proxy https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy/v2.8.0/cloud-sql-proxy.linux.amd64
+          chmod +x cloud-sql-proxy
+          
+          # Start Cloud SQL Proxy in background (uses IAM auth from gcloud)
+          ./cloud-sql-proxy --port 5433 "${{ secrets.CLOUD_SQL_CONNECTION_NAME }}" &
+          PROXY_PID=$!
+          
+          # Wait for proxy to be ready
+          sleep 10
+          
+          # Run Drizzle migrations through proxy
+          DATABASE_URL="postgresql://${{ secrets.DB_USER }}:${{ secrets.DB_PASSWORD }}@127.0.0.1:5433/${{ secrets.DB_NAME }}" npx drizzle-kit push --config=drizzle.config.ts
+          
+          # Stop the proxy
+          kill $PROXY_PID || true
         env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL_DEV }}
+          DATABASE_URL: "postgresql://${{ secrets.DB_USER }}:${{ secrets.DB_PASSWORD }}@127.0.0.1:5433/${{ secrets.DB_NAME }}"
 
       - name: Configure Docker
         run: gcloud --quiet auth configure-docker gcr.io
@@ -130,10 +142,24 @@ jobs:
 
       - name: Run Database Migrations
         run: |
-          # Run Drizzle migrations with explicit config
-          npx drizzle-kit push --config=drizzle.config.ts
+          # Install Cloud SQL Proxy
+          curl -o cloud-sql-proxy https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy/v2.8.0/cloud-sql-proxy.linux.amd64
+          chmod +x cloud-sql-proxy
+          
+          # Start Cloud SQL Proxy in background (uses IAM auth from gcloud)
+          ./cloud-sql-proxy --port 5433 "${{ secrets.CLOUD_SQL_CONNECTION_NAME_PROD }}" &
+          PROXY_PID=$!
+          
+          # Wait for proxy to be ready
+          sleep 10
+          
+          # Run Drizzle migrations through proxy
+          DATABASE_URL="postgresql://${{ secrets.DB_USER_PROD }}:${{ secrets.DB_PASSWORD_PROD }}@127.0.0.1:5433/${{ secrets.DB_NAME_PROD }}" npx drizzle-kit push --config=drizzle.config.ts
+          
+          # Stop the proxy
+          kill $PROXY_PID || true
         env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL_PROD }}
+          DATABASE_URL: "postgresql://${{ secrets.DB_USER_PROD }}:${{ secrets.DB_PASSWORD_PROD }}@127.0.0.1:5433/${{ secrets.DB_NAME_PROD }}"
 
       - name: Configure Docker
         run: gcloud --quiet auth configure-docker gcr.io
