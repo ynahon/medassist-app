@@ -61,6 +61,36 @@ jobs:
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run Database Migrations
+        run: |
+          # Install Cloud SQL Proxy
+          curl -o cloud-sql-proxy https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy/v2.8.0/cloud-sql-proxy.linux.amd64
+          chmod +x cloud-sql-proxy
+          
+          # Start Cloud SQL Proxy in background
+          ./cloud-sql-proxy --port 5432 ${{ secrets.CLOUD_SQL_CONNECTION_NAME_DEV }} &
+          PROXY_PID=$!
+          
+          # Wait for proxy to be ready
+          sleep 5
+          
+          # Run Drizzle migrations
+          DATABASE_URL="postgresql://${{ secrets.DB_USER_DEV }}:${{ secrets.DB_PASSWORD_DEV }}@127.0.0.1:5432/${{ secrets.DB_NAME_DEV }}" npm run db:push
+          
+          # Stop the proxy
+          kill $PROXY_PID || true
+        env:
+          DATABASE_URL: "postgresql://${{ secrets.DB_USER_DEV }}:${{ secrets.DB_PASSWORD_DEV }}@127.0.0.1:5432/${{ secrets.DB_NAME_DEV }}"
+
       - name: Configure Docker
         run: gcloud --quiet auth configure-docker gcr.io
 
@@ -69,14 +99,6 @@ jobs:
         with:
           cluster_name: medassist-cluster-dev
           location: ${{ env.GKE_REGION }}
-
-      # Create DEV Cloud SQL CA Certificate Secret
-      - name: Create Cloud SQL CA Certificate Secret (Dev)
-        run: |
-          kubectl create secret generic cloud-sql-ca-cert \
-            --from-file=server-ca.pem=k8s/certificates/server-ca-dev.pem \
-            -n medassist-dev \
-            --dry-run=client -o yaml | kubectl apply -f -
 
       - name: Build and Push
         run: |
@@ -108,6 +130,36 @@ jobs:
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run Database Migrations
+        run: |
+          # Install Cloud SQL Proxy
+          curl -o cloud-sql-proxy https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy/v2.8.0/cloud-sql-proxy.linux.amd64
+          chmod +x cloud-sql-proxy
+          
+          # Start Cloud SQL Proxy in background
+          ./cloud-sql-proxy --port 5432 ${{ secrets.CLOUD_SQL_CONNECTION_NAME_PROD }} &
+          PROXY_PID=$!
+          
+          # Wait for proxy to be ready
+          sleep 5
+          
+          # Run Drizzle migrations
+          DATABASE_URL="postgresql://${{ secrets.DB_USER_PROD }}:${{ secrets.DB_PASSWORD_PROD }}@127.0.0.1:5432/${{ secrets.DB_NAME_PROD }}" npm run db:push
+          
+          # Stop the proxy
+          kill $PROXY_PID || true
+        env:
+          DATABASE_URL: "postgresql://${{ secrets.DB_USER_PROD }}:${{ secrets.DB_PASSWORD_PROD }}@127.0.0.1:5432/${{ secrets.DB_NAME_PROD }}"
+
       - name: Configure Docker
         run: gcloud --quiet auth configure-docker gcr.io
 
@@ -116,14 +168,6 @@ jobs:
         with:
           cluster_name: medassist-cluster-prod
           location: ${{ env.GKE_REGION }}
-
-      # Create PROD Cloud SQL CA Certificate Secret
-      - name: Create Cloud SQL CA Certificate Secret (Prod)
-        run: |
-          kubectl create secret generic cloud-sql-ca-cert \
-            --from-file=server-ca.pem=k8s/certificates/server-ca-prod.pem \
-            -n medassist-prod \
-            --dry-run=client -o yaml | kubectl apply -f -
 
       - name: Build and Push
         run: |
