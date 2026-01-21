@@ -83,11 +83,8 @@ jobs:
           # Wait for proxy to be ready
           sleep 10
           
-          # Clean up temporary OTP codes before migration (avoids unique constraint prompts)
-          node -e "const{Client}=require('pg');const c=new Client({connectionString:process.env.DATABASE_URL});c.connect().then(()=>c.query('TRUNCATE TABLE otp_codes')).then(()=>c.end()).catch(e=>{console.log('Truncate skipped:',e.message);c.end()})"
-              
           # Run Drizzle migrations through proxy
-          DATABASE_URL="postgresql://${{ secrets.DB_USER }}:${{ secrets.DB_PASSWORD }}@127.0.0.1:5433/${{ secrets.DB_NAME }}" npx drizzle-kit push --config=drizzle.config.ts
+          DATABASE_URL="postgresql://${{ secrets.DB_USER }}:${{ secrets.DB_PASSWORD }}@127.0.0.1:5433/${{ secrets.DB_NAME }}" npm run db:push -- --force
           
           # Stop the proxy
           kill $PROXY_PID || true
@@ -156,11 +153,8 @@ jobs:
           # Wait for proxy to be ready
           sleep 10
           
-          # Clean up temporary OTP codes before migration (avoids unique constraint prompts)
-          node -e "const{Client}=require('pg');const c=new Client({connectionString:process.env.DATABASE_URL});c.connect().then(()=>c.query('TRUNCATE TABLE otp_codes')).then(()=>c.end()).catch(e=>{console.log('Truncate skipped:',e.message);c.end()})"
-                    
           # Run Drizzle migrations through proxy
-          DATABASE_URL="postgresql://${{ secrets.DB_USER_PROD }}:${{ secrets.DB_PASSWORD_PROD }}@127.0.0.1:5433/${{ secrets.DB_NAME_PROD }}" npx drizzle-kit push --config=drizzle.config.ts
+          DATABASE_URL="postgresql://${{ secrets.DB_USER_PROD }}:${{ secrets.DB_PASSWORD_PROD }}@127.0.0.1:5433/${{ secrets.DB_NAME_PROD }}" npm run db:push -- --force
           
           # Stop the proxy
           kill $PROXY_PID || true
