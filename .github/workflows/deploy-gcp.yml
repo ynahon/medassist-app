@@ -82,10 +82,7 @@ jobs:
           
           # Wait for proxy to be ready
           sleep 10
-          
-          # Clean up temporary OTP codes before migration (avoids unique constraint prompts)
-          PGPASSWORD="${{ secrets.DB_PASSWORD }}" psql -h 127.0.0.1 -p 5433 -U "${{ secrets.DB_USER }}" -d "${{ secrets.DB_NAME }}" -c "TRUNCATE TABLE otp_codes;" || true
-          
+              
           # Run Drizzle migrations through proxy
           DATABASE_URL="postgresql://${{ secrets.DB_USER }}:${{ secrets.DB_PASSWORD }}@127.0.0.1:5433/${{ secrets.DB_NAME }}" npx drizzle-kit push --config=drizzle.config.ts
           
@@ -155,10 +152,7 @@ jobs:
           
           # Wait for proxy to be ready
           sleep 10
-          
-          # Clean up temporary OTP codes before migration (avoids unique constraint prompts)
-          PGPASSWORD="${{ secrets.DB_PASSWORD_PROD }}" psql -h 127.0.0.1 -p 5433 -U "${{ secrets.DB_USER_PROD }}" -d "${{ secrets.DB_NAME_PROD }}" -c "TRUNCATE TABLE otp_codes;" || true
-          
+                    
           # Run Drizzle migrations through proxy
           DATABASE_URL="postgresql://${{ secrets.DB_USER_PROD }}:${{ secrets.DB_PASSWORD_PROD }}@127.0.0.1:5433/${{ secrets.DB_NAME_PROD }}" npx drizzle-kit push --config=drizzle.config.ts
           
