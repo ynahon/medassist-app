@@ -84,7 +84,7 @@ jobs:
           sleep 10
           
           # Run Drizzle migrations through proxy
-          DATABASE_URL="postgresql://${{ secrets.DB_USER }}:${{ secrets.DB_PASSWORD }}@127.0.0.1:5433/${{ secrets.DB_NAME }}" npx drizzle-kit push --config=drizzle.config.ts  --force
+          CI=true DATABASE_URL="postgresql://${{ secrets.DB_USER }}:${{ secrets.DB_PASSWORD }}@127.0.0.1:5433/${{ secrets.DB_NAME }}" npx drizzle-kit push --config=drizzle.config.ts
           
           # Stop the proxy
           kill $PROXY_PID || true
@@ -154,7 +154,7 @@ jobs:
           sleep 10
           
           # Run Drizzle migrations through proxy
-          DATABASE_URL="postgresql://${{ secrets.DB_USER_PROD }}:${{ secrets.DB_PASSWORD_PROD }}@127.0.0.1:5433/${{ secrets.DB_NAME_PROD }}" npx drizzle-kit push --config=drizzle.config.ts  --force
+          CI=true DATABASE_URL="postgresql://${{ secrets.DB_USER_PROD }}:${{ secrets.DB_PASSWORD_PROD }}@127.0.0.1:5433/${{ secrets.DB_NAME_PROD }}" npx drizzle-kit push --config=drizzle.config.ts
           
           # Stop the proxy
           kill $PROXY_PID || true
