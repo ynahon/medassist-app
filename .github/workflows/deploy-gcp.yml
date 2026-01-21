@@ -72,24 +72,10 @@ jobs:
 
       - name: Run Database Migrations
         run: |
-          # Install Cloud SQL Proxy
-          curl -o cloud-sql-proxy https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy/v2.8.0/cloud-sql-proxy.linux.amd64
-          chmod +x cloud-sql-proxy
-          
-          # Start Cloud SQL Proxy in background
-          ./cloud-sql-proxy --port 5432 ${{ secrets.CLOUD_SQL_CONNECTION_NAME_DEV }} &
-          PROXY_PID=$!
-          
-          # Wait for proxy to be ready
-          sleep 5
-          
-          # Run Drizzle migrations
-          DATABASE_URL="postgresql://${{ secrets.DB_USER_DEV }}:${{ secrets.DB_PASSWORD_DEV }}@127.0.0.1:5432/${{ secrets.DB_NAME_DEV }}" npm run db:push
-          
-          # Stop the proxy
-          kill $PROXY_PID || true
+          # Run Drizzle migrations with explicit config
+          npx drizzle-kit push --config=drizzle.config.ts
         env:
-          DATABASE_URL: "postgresql://${{ secrets.DB_USER_DEV }}:${{ secrets.DB_PASSWORD_DEV }}@127.0.0.1:5432/${{ secrets.DB_NAME_DEV }}"
+          DATABASE_URL: ${{ secrets.DATABASE_URL_DEV }}
 
       - name: Configure Docker
         run: gcloud --quiet auth configure-docker gcr.io
@@ -111,6 +97,7 @@ jobs:
           cd k8s/overlays/dev
           kustomize edit set image gcr.io/PROJECT_ID/IMAGE=gcr.io/$PROJECT_ID/medassist-api-dev:$GITHUB_SHA
           kubectl apply -k .
+          # Wait for rollout - don't fail CI if it times out (zero-downtime maintained)
           kubectl rollout status deployment/medassist-dev -n medassist-dev --timeout=10m || echo "Rollout still in progress - old pod remains running"
 
   deploy-prod:
@@ -141,24 +128,10 @@ jobs:
 
       - name: Run Database Migrations
         run: |
-          # Install Cloud SQL Proxy
-          curl -o cloud-sql-proxy https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy/v2.8.0/cloud-sql-proxy.linux.amd64
-          chmod +x cloud-sql-proxy
-          
-          # Start Cloud SQL Proxy in background
-          ./cloud-sql-proxy --port 5432 ${{ secrets.CLOUD_SQL_CONNECTION_NAME_PROD }} &
-          PROXY_PID=$!
-          
-          # Wait for proxy to be ready
-          sleep 5
-          
-          # Run Drizzle migrations
-          DATABASE_URL="postgresql://${{ secrets.DB_USER_PROD }}:${{ secrets.DB_PASSWORD_PROD }}@127.0.0.1:5432/${{ secrets.DB_NAME_PROD }}" npm run db:push
-          
-          # Stop the proxy
-          kill $PROXY_PID || true
+          # Run Drizzle migrations with explicit config
+          npx drizzle-kit push --config=drizzle.config.ts
         env:
-          DATABASE_URL: "postgresql://${{ secrets.DB_USER_PROD }}:${{ secrets.DB_PASSWORD_PROD }}@127.0.0.1:5432/${{ secrets.DB_NAME_PROD }}"
+          DATABASE_URL: ${{ secrets.DATABASE_URL_PROD }}
 
       - name: Configure Docker
         run: gcloud --quiet auth configure-docker gcr.io
