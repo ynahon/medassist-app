@@ -18,9 +18,16 @@ function getVersion(): string {
   }
 }
 
-console.log("Key starting with:", process.env.GEMINI_API_KEY?.substring(0, 5) + "...");
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const apiKey = process.env.GEMINI_API_KEY;
+
+if (!apiKey) {
+  throw new Error("GEMINI_API_KEY is not defined in environment variables");
+}
+
+const genAI = new GoogleGenerativeAI(apiKey);
 const geminiModel = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+
+console.log("Key starting with:", apiKey.substring(0, 5) + "...");
 
 // Only initialize Twilio if credentials are configured
 const twilioEnabled = !!(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && process.env.TWILIO_PHONE_NUMBER);
