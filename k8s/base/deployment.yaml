@@ -29,6 +29,11 @@ spec:
                 secretKeyRef:
                   name: medassist-secrets
                   key: DATABASE_URL
+            - name: GEMINI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: medassist-secrets
+                  key: GEMINI_API_KEY
             - name: NODE_ENV
               value: "production"
           readinessProbe:
