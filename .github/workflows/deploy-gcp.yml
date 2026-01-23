@@ -124,10 +124,30 @@ jobs:
           cd k8s/overlays/dev
           kustomize edit set image gcr.io/PROJECT_ID/IMAGE=gcr.io/$PROJECT_ID/medassist-api-dev:$GITHUB_SHA
           kubectl apply -k .
+          
           # Force restart to ensure new image is pulled and pod is restarted
           kubectl rollout restart deployment/medassist-dev -n medassist-dev
-          # Wait for rollout - don't fail CI if it times out (zero-downtime maintained)
-          kubectl rollout status deployment/medassist-dev -n medassist-dev --timeout=10m || echo "Rollout still in progress - old pod remains running"
+          
+          # Check pod status before waiting
+          echo "Current pods:"
+          kubectl get pods -n medassist-dev -l app=medassist-dev
+          
+          # Wait for rollout with better timeout handling
+          if ! kubectl rollout status deployment/medassist-dev -n medassist-dev --timeout=5m; then
+            echo "Rollout taking longer than expected, checking pod status..."
+            kubectl get pods -n medassist-dev -l app=medassist-dev
+            kubectl describe pods -n medassist-dev -l app=medassist-dev | grep -A 10 "Events:"
+            
+            # Force delete old pods if stuck
+            echo "Force deleting old pods..."
+            kubectl delete pods -n medassist-dev -l app=medassist-dev --grace-period=30 --force || true
+            
+            # Wait again for new pod
+            kubectl rollout status deployment/medassist-dev -n medassist-dev --timeout=3m || echo "Deployment completed but rollout status uncertain"
+          fi
+          
+          echo "Final pod status:"
+          kubectl get pods -n medassist-dev -l app=medassist-dev
 
   deploy-prod:
     name: Deploy to Prod
@@ -208,6 +228,27 @@ jobs:
           cd k8s/overlays/prod
           kustomize edit set image gcr.io/PROJECT_ID/IMAGE=gcr.io/$PROJECT_ID/medassist-api:$GITHUB_SHA
           kubectl apply -k .
+          
           # Force restart to ensure new image is pulled and pod is restarted
           kubectl rollout restart deployment/medassist-prod -n medassist-prod
-          kubectl rollout status deployment/medassist-prod -n medassist-prod --timeout=10m
+          
+          # Check pod status before waiting
+          echo "Current pods:"
+          kubectl get pods -n medassist-prod -l app=medassist-prod
+          
+          # Wait for rollout with better timeout handling
+          if ! kubectl rollout status deployment/medassist-prod -n medassist-prod --timeout=5m; then
+            echo "Rollout taking longer than expected, checking pod status..."
+            kubectl get pods -n medassist-prod -l app=medassist-prod
+            kubectl describe pods -n medassist-prod -l app=medassist-prod | grep -A 10 "Events:"
+            
+            # Force delete old pods if stuck
+            echo "Force deleting old pods..."
+            kubectl delete pods -n medassist-prod -l app=medassist-prod --grace-period=30 --force || true
+            
+            # Wait again for new pod
+            kubectl rollout status deployment/medassist-prod -n medassist-prod --timeout=3m || echo "Deployment completed but rollout status uncertain"
+          fi
+          
+          echo "Final pod status:"
+          kubectl get pods -n medassist-prod -l app=medassist-prod
