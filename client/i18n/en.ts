@@ -202,7 +202,8 @@ export const en = {
     logout: "Log Out",
     deleteAccount: "Delete Account",
     deleteConfirm: "Are you sure you want to delete your account? This will permanently remove all your data and cannot be undone.",
-    version: "Version",
+    version: "App Version",
+    backendVersion: "Backend Version",
   },
   notifications: {
     monthlyReminder: "Time for your monthly health check-in",

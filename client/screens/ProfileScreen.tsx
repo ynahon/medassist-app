@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { View, StyleSheet, Pressable, Switch, Modal, Platform } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
@@ -7,6 +7,8 @@ import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Feather } from "@expo/vector-icons";
 import DateTimePicker, { DateTimePickerEvent } from "@react-native-community/datetimepicker";
+import Constants from "expo-constants";
+import { getApiUrl } from "@/lib/query-client";
 
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 
@@ -48,6 +50,25 @@ export default function ProfileScreen() {
   );
   const [editingGender, setEditingGender] = useState<Gender>(user?.gender ?? null);
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [backendVersion, setBackendVersion] = useState<string | null>(null);
+
+  const appVersion = Constants.expoConfig?.version || "1.0.0";
+
+  useEffect(() => {
+    const fetchBackendVersion = async () => {
+      try {
+        const baseUrl = getApiUrl();
+        const response = await fetch(`${baseUrl}health`);
+        if (response.ok) {
+          const data = await response.json();
+          setBackendVersion(data.version || null);
+        }
+      } catch (error) {
+        console.error("Failed to fetch backend version:", error);
+      }
+    };
+    fetchBackendVersion();
+  }, []);
 
   const textAlign = isRTL ? "right" : "left";
 
@@ -315,9 +336,16 @@ export default function ProfileScreen() {
           </Pressable>
         </Card>
 
-        <ThemedText type="caption" style={[styles.version, { color: theme.textSecondary }]}>
-          {t.profile.version} 1.0.0
-        </ThemedText>
+        <View style={styles.versionContainer}>
+          <ThemedText type="caption" style={[styles.version, { color: theme.textSecondary }]}>
+            {t.profile.version}: {appVersion}
+          </ThemedText>
+          {backendVersion ? (
+            <ThemedText type="caption" style={[styles.version, { color: theme.textSecondary }]}>
+              {t.profile.backendVersion}: {backendVersion}
+            </ThemedText>
+          ) : null}
+        </View>
       </KeyboardAwareScrollViewCompat>
 
       <Modal visible={showLanguageModal} animationType="slide" presentationStyle="pageSheet">
@@ -570,9 +598,13 @@ const styles = StyleSheet.create({
     height: 1,
     marginHorizontal: Spacing.lg,
   },
+  versionContainer: {
+    alignItems: "center",
+    marginTop: Spacing["2xl"],
+    gap: Spacing.xs,
+  },
   version: {
     textAlign: "center",
-    marginTop: Spacing["2xl"],
   },
   modalContainer: {
     flex: 1,

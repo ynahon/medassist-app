@@ -204,7 +204,8 @@ export const he: Translations = {
     logout: "התנתק",
     deleteAccount: "מחק חשבון",
     deleteConfirm: "האם אתה בטוח שברצונך למחוק את החשבון שלך? פעולה זו תמחק לצמיתות את כל הנתונים שלך ולא ניתן לבטל אותה.",
-    version: "גרסה",
+    version: "גרסת אפליקציה",
+    backendVersion: "גרסת שרת",
   },
   notifications: {
     monthlyReminder: "הגיע הזמן לבדיקת הבריאות החודשית שלך",
