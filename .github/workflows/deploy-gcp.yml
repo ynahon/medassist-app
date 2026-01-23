@@ -124,6 +124,8 @@ jobs:
           cd k8s/overlays/dev
           kustomize edit set image gcr.io/PROJECT_ID/IMAGE=gcr.io/$PROJECT_ID/medassist-api-dev:$GITHUB_SHA
           kubectl apply -k .
+          # Force restart to ensure new image is pulled and pod is restarted
+          kubectl rollout restart deployment/medassist-dev -n medassist-dev
           # Wait for rollout - don't fail CI if it times out (zero-downtime maintained)
           kubectl rollout status deployment/medassist-dev -n medassist-dev --timeout=10m || echo "Rollout still in progress - old pod remains running"
 
@@ -206,4 +208,6 @@ jobs:
           cd k8s/overlays/prod
           kustomize edit set image gcr.io/PROJECT_ID/IMAGE=gcr.io/$PROJECT_ID/medassist-api:$GITHUB_SHA
           kubectl apply -k .
+          # Force restart to ensure new image is pulled and pod is restarted
+          kubectl rollout restart deployment/medassist-prod -n medassist-prod
           kubectl rollout status deployment/medassist-prod -n medassist-prod --timeout=10m
