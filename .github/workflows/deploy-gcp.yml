@@ -72,18 +72,14 @@ jobs:
 
       - name: Run Database Migrations
         run: |
-          # Install Cloud SQL Proxy
           curl -o cloud-sql-proxy https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy/v2.8.0/cloud-sql-proxy.linux.amd64
           chmod +x cloud-sql-proxy
           
-          # Start Cloud SQL Proxy in background (uses IAM auth from gcloud)
           ./cloud-sql-proxy --port 5433 "${{ secrets.CLOUD_SQL_CONNECTION_NAME }}" &
           PROXY_PID=$!
           
-          # Wait for proxy to be ready
           sleep 10
           
-          # Add unique constraints via SQL first (prevents drizzle prompts)
           node -e "
             const{Client}=require('pg');
             const c=new Client({connectionString:'postgresql://${{ secrets.DB_USER }}:${{ secrets.DB_PASSWORD }}@127.0.0.1:5433/${{ secrets.DB_NAME }}'});
@@ -96,10 +92,8 @@ jobs:
             })();
           "
           
-          # Run Drizzle push with timeout (skip if it hangs on prompts)
           timeout 30 bash -c 'DATABASE_URL="postgresql://${{ secrets.DB_USER }}:${{ secrets.DB_PASSWORD }}@127.0.0.1:5433/${{ secrets.DB_NAME }}" npx drizzle-kit push --config=drizzle.config.ts' || echo "Schema synced"
           
-          # Stop the proxy
           kill $PROXY_PID || true
         env:
           DATABASE_URL: "postgresql://${{ secrets.DB_USER }}:${{ secrets.DB_PASSWORD }}@127.0.0.1:5433/${{ secrets.DB_NAME }}"
@@ -125,24 +119,25 @@ jobs:
           kustomize edit set image gcr.io/PROJECT_ID/IMAGE=gcr.io/$PROJECT_ID/medassist-api-dev:$GITHUB_SHA
           kubectl apply -k .
           
-          # Force restart to ensure new image is pulled and pod is restarted
+          # Patch deployment to use imagePullPolicy: Always
+          kubectl patch deployment medassist-dev -n medassist-dev --type='json' -p='[
+            {"op": "replace", "path": "/spec/template/spec/containers/0/imagePullPolicy", "value": "Always"}
+          ]'
+          
+          # Force restart to ensure new image is pulled
           kubectl rollout restart deployment/medassist-dev -n medassist-dev
           
-          # Check pod status before waiting
           echo "Current pods:"
           kubectl get pods -n medassist-dev -l app=medassist-dev
           
-          # Wait for rollout with better timeout handling
           if ! kubectl rollout status deployment/medassist-dev -n medassist-dev --timeout=5m; then
             echo "Rollout taking longer than expected, checking pod status..."
             kubectl get pods -n medassist-dev -l app=medassist-dev
             kubectl describe pods -n medassist-dev -l app=medassist-dev | grep -A 10 "Events:"
             
-            # Force delete old pods if stuck
             echo "Force deleting old pods..."
             kubectl delete pods -n medassist-dev -l app=medassist-dev --grace-period=30 --force || true
             
-            # Wait again for new pod
             kubectl rollout status deployment/medassist-dev -n medassist-dev --timeout=3m || echo "Deployment completed but rollout status uncertain"
           fi
           
@@ -177,18 +172,14 @@ jobs:
 
       - name: Run Database Migrations
         run: |
-          # Install Cloud SQL Proxy
           curl -o cloud-sql-proxy https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy/v2.8.0/cloud-sql-proxy.linux.amd64
           chmod +x cloud-sql-proxy
           
-          # Start Cloud SQL Proxy in background (uses IAM auth from gcloud)
           ./cloud-sql-proxy --port 5433 "${{ secrets.CLOUD_SQL_CONNECTION_NAME_PROD }}" &
           PROXY_PID=$!
           
-          # Wait for proxy to be ready
           sleep 10
           
-          # Add unique constraints via SQL first (prevents drizzle prompts)
           node -e "
             const{Client}=require('pg');
             const c=new Client({connectionString:'postgresql://${{ secrets.DB_USER_PROD }}:${{ secrets.DB_PASSWORD_PROD }}@127.0.0.1:5433/${{ secrets.DB_NAME_PROD }}'});
@@ -201,10 +192,8 @@ jobs:
             })();
           "
           
-          # Run Drizzle push with timeout (skip if it hangs on prompts)
           timeout 30 bash -c 'DATABASE_URL="postgresql://${{ secrets.DB_USER_PROD }}:${{ secrets.DB_PASSWORD_PROD }}@127.0.0.1:5433/${{ secrets.DB_NAME_PROD }}" npx drizzle-kit push --config=drizzle.config.ts' || echo "Schema synced"
           
-          # Stop the proxy
           kill $PROXY_PID || true
         env:
           DATABASE_URL: "postgresql://${{ secrets.DB_USER_PROD }}:${{ secrets.DB_PASSWORD_PROD }}@127.0.0.1:5433/${{ secrets.DB_NAME_PROD }}"
@@ -220,7 +209,7 @@ jobs:
 
       - name: Build and Push
         run: |
-          docker build --tag "gcr.io/$PROJECT_ID/medassist-api:$GITHUB_SHA" .
+          docker build --no-cache --tag "gcr.io/$PROJECT_ID/medassist-api:$GITHUB_SHA" .
           docker push "gcr.io/$PROJECT_ID/medassist-api:$GITHUB_SHA"
 
       - name: Deploy to K8s (Prod)
@@ -229,24 +218,25 @@ jobs:
           kustomize edit set image gcr.io/PROJECT_ID/IMAGE=gcr.io/$PROJECT_ID/medassist-api:$GITHUB_SHA
           kubectl apply -k .
           
-          # Force restart to ensure new image is pulled and pod is restarted
+          # Patch deployment to use imagePullPolicy: Always
+          kubectl patch deployment medassist-prod -n medassist-prod --type='json' -p='[
+            {"op": "replace", "path": "/spec/template/spec/containers/0/imagePullPolicy", "value": "Always"}
+          ]'
+          
+          # Force restart to ensure new image is pulled
           kubectl rollout restart deployment/medassist-prod -n medassist-prod
           
-          # Check pod status before waiting
           echo "Current pods:"
           kubectl get pods -n medassist-prod -l app=medassist-prod
           
-          # Wait for rollout with better timeout handling
           if ! kubectl rollout status deployment/medassist-prod -n medassist-prod --timeout=5m; then
             echo "Rollout taking longer than expected, checking pod status..."
             kubectl get pods -n medassist-prod -l app=medassist-prod
             kubectl describe pods -n medassist-prod -l app=medassist-prod | grep -A 10 "Events:"
             
-            # Force delete old pods if stuck
             echo "Force deleting old pods..."
             kubectl delete pods -n medassist-prod -l app=medassist-prod --grace-period=30 --force || true
             
-            # Wait again for new pod
             kubectl rollout status deployment/medassist-prod -n medassist-prod --timeout=3m || echo "Deployment completed but rollout status uncertain"
           fi
           
