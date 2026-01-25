@@ -10,6 +10,7 @@ Key features include:
 - Monthly health surveys with symptom tracking and soft-delete capability
 - Medical document upload with AI-powered data extraction
 - AI-generated health recommendations with filtering options
+- Smartwatch heart rate data import from HealthKit (iOS) and Health Connect (Android)
 - Privacy-focused design suitable for all ages
 
 ## User Preferences
@@ -40,6 +41,31 @@ Preferred communication style: Simple, everyday language.
 - OTP codes expire after 5 minutes
 - If Twilio fails to send SMS (e.g., trial account limitations), the code is displayed on screen for testing
 - Backend endpoints: `POST /api/auth/send-otp`, `POST /api/auth/verify-otp`
+
+### System Prompts (Admin Configurable)
+- **Database Table**: `system_prompts`
+- **Prompt Types**: `recommendations`, `document_extraction`
+- **Languages**: `en` (English), `he` (Hebrew)
+- **Admin API Endpoints**:
+  - `GET /api/admin/system-prompts` - List all prompts
+  - `GET /api/admin/system-prompts/:type/:language` - Get specific prompt
+  - `PUT /api/admin/system-prompts/:type/:language` - Update prompt
+- **Template Variables** (for recommendations prompt):
+  - `{{hasSurveyData}}`, `{{surveyCount}}`, `{{hasDocumentData}}`
+  - `{{hasDemographicData}}`, `{{existingTitlesList}}`, `{{criticalWarning}}`
+- **Note**: Default prompts are seeded on server startup if not in database
+
+### Heart Rate Data Import
+- **Database Tables**: `heart_rate_samples`, `health_connections`
+- **Data Sources**: HealthKit (iOS), Health Connect (Android)
+- **Backend Endpoints**:
+  - `POST /api/cardio/heart-rate/bulk` - Bulk upload heart rate samples
+  - `GET /api/cardio/heart-rate` - Query heart rate data with date range filtering
+  - `GET /api/cardio/heart-rate/stats` - Get statistics (avg, min, max, count)
+  - `GET /api/cardio/connection` - Get health connection status
+  - `DELETE /api/cardio/connection` - Disconnect health data source
+- **UI**: WatchConnectionScreen accessible from Profile, shows connection status and heart rate stats
+- **Note**: Full HealthKit/Health Connect integration requires device builds (not available in Expo Go)
 
 ### Navigation Structure
 1. **Onboarding Stack** (unauthenticated users):

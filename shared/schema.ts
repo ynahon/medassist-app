@@ -114,4 +114,75 @@ export interface ExtractedDocumentData {
   confidence: number;
 }
 
+// Heart Rate Samples from HealthKit/Health Connect
+export const heartRateSourceEnum = ["healthkit", "health_connect"] as const;
+export type HeartRateSource = (typeof heartRateSourceEnum)[number];
+
+export const heartRateSamples = pgTable("heart_rate_samples", {
+  id: varchar("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull(),
+  timestamp: timestamp("timestamp").notNull(),
+  bpm: integer("bpm").notNull(),
+  source: text("source").notNull().$type<HeartRateSource>(),
+  deviceName: text("device_name"),
+  workoutContext: text("workout_context"),
+  metadata: text("metadata"),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
+export const insertHeartRateSampleSchema = createInsertSchema(heartRateSamples).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertHeartRateSample = z.infer<typeof insertHeartRateSampleSchema>;
+export type HeartRateSample = typeof heartRateSamples.$inferSelect;
+
+// Health connection status
+export const healthConnections = pgTable("health_connections", {
+  id: varchar("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().unique(),
+  source: text("source").notNull().$type<HeartRateSource>(),
+  connected: integer("connected").notNull().default(0),
+  lastSyncAt: timestamp("last_sync_at"),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+  updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
+export type HealthConnection = typeof healthConnections.$inferSelect;
+
+// System prompts for AI functionality
+export const promptTypeEnum = ["recommendations", "document_extraction"] as const;
+export type PromptType = (typeof promptTypeEnum)[number];
+
+export const languageEnum = ["en", "he"] as const;
+export type PromptLanguage = (typeof languageEnum)[number];
+
+export const systemPrompts = pgTable("system_prompts", {
+  id: varchar("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  promptType: text("prompt_type").notNull().$type<PromptType>(),
+  language: text("language").notNull().$type<PromptLanguage>(),
+  promptText: text("prompt_text").notNull(),
+  description: text("description"),
+  isActive: integer("is_active").notNull().default(1),
+  version: integer("version").notNull().default(1),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+  updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
+export const insertSystemPromptSchema = createInsertSchema(systemPrompts).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InsertSystemPrompt = z.infer<typeof insertSystemPromptSchema>;
+export type SystemPrompt = typeof systemPrompts.$inferSelect;
+
 export * from "./models/chat";

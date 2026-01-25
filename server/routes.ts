@@ -6,8 +6,10 @@ import twilio from "twilio";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { eq } from "drizzle-orm";
 import documentRoutes, { getDocumentsForRecommendations } from "./documentRoutes";
+import heartRateRoutes from "./heartRateRoutes";
+import { getSystemPrompt, updateSystemPrompt, getAllSystemPrompts, seedDefaultPrompts, processPromptTemplate } from "./systemPrompts";
 import { storage, hashIdNumber, db } from "./storage";
-import { otpCodes } from "../shared/schema";
+import { otpCodes, PromptType, PromptLanguage } from "../shared/schema";
 
 function getVersion(): string {
   try {
@@ -373,6 +375,56 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.use("/api/medical-documents", documentRoutes);
+  app.use("/api/cardio", heartRateRoutes);
+
+  // System prompts management endpoints (for admin use)
+  app.get("/api/admin/system-prompts", async (req, res) => {
+    try {
+      const prompts = await getAllSystemPrompts();
+      res.json({ success: true, prompts });
+    } catch (error) {
+      console.error("Error fetching system prompts:", error);
+      res.status(500).json({ error: "Failed to fetch system prompts" });
+    }
+  });
+
+  app.get("/api/admin/system-prompts/:type/:language", async (req, res) => {
+    try {
+      const { type, language } = req.params;
+      const prompt = await getSystemPrompt(type as PromptType, language as PromptLanguage);
+      res.json({ success: true, prompt });
+    } catch (error) {
+      console.error("Error fetching system prompt:", error);
+      res.status(500).json({ error: "Failed to fetch system prompt" });
+    }
+  });
+
+  app.put("/api/admin/system-prompts/:type/:language", async (req, res) => {
+    try {
+      const { type, language } = req.params;
+      const { promptText, description } = req.body;
+
+      if (!promptText) {
+        return res.status(400).json({ error: "promptText is required" });
+      }
+
+      const success = await updateSystemPrompt(
+        type as PromptType,
+        language as PromptLanguage,
+        promptText,
+        description
+      );
+
+      if (success) {
+        res.json({ success: true, message: "System prompt updated" });
+      } else {
+        res.status(500).json({ error: "Failed to update system prompt" });
+      }
+    } catch (error) {
+      console.error("Error updating system prompt:", error);
+      res.status(500).json({ error: "Failed to update system prompt" });
+    }
+  });
 
   app.post("/api/recommendations/generate", async (req, res) => {
     try {
@@ -443,147 +495,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const hasDocumentData = documentContext.length > 0;
       const hasDemographicData = userProfile.dateOfBirth || userProfile.gender;
 
-      const systemPrompt = isHebrew
-        ? `אתה עוזר בריאות מתחשב ומקצועי. תפקידך להציע בדיקות בריאות רוטיניות, חיסונים והמלצות לאורח חיים.
+      const promptLanguage = isHebrew ? "he" : "en";
+      const basePrompt = await getSystemPrompt("recommendations", promptLanguage as PromptLanguage);
+      
+      const systemPrompt = processPromptTemplate(basePrompt, {
+        hasSurveyData,
+        surveyCount: surveys?.length || 0,
+        hasDocumentData,
+        hasDemographicData,
+        existingTitlesList,
+        criticalWarning,
+      });
 
-חשוב: אתה לא מאבחן מחלות. אתה רק מציע בדיקות ומעקבים מקובלים.
-
-היה שמרן: אל תפרש ערכים גבוליים כאבחנות. אם נמצאו ממצאים קריטיים או דחופים במסמכים, המלץ על פנייה מיידית לרופא.${criticalWarning}
-
-סדר עדיפויות להמלצות (חובה לעקוב אחר סדר זה בדיוק):
-
-עדיפות ראשונה (חובה) - המלצות מבוססות סקרים בריאותיים:
-${hasSurveyData ? `למשתמש יש ${surveys.length} סקרים בריאותיים. עליך להתחיל בהמלצות המבוססות על נתוני הסקרים האלה.
-- אם המשתמש דיווח על רמת כאב גבוהה (5+) - המלץ על בדיקה אצל רופא
-- אם המשתמש דיווח על תסמינים ספציפיים - המלץ על מעקב רלוונטי
-- אם המשתמש דיווח על מצב רוח ירוד - המלץ על תמיכה או ייעוץ
-- אם הסימפטומים נמשכים מעל שבוע - המלץ על בדיקה רפואית
-
-חובה: התחל את שדה ה-rationale בביטוי כמו:
-- "בהתבסס על הסקר האחרון שלך..."
-- "לפי הדיווח שלך על..."
-- "בעקבות תסמינים שציינת..."` : `אין נתוני סקרים זמינים. דלג לעדיפות הבאה.`}
-
-עדיפות שנייה - המלצות מבוססות מסמכים רפואיים:
-${hasDocumentData ? `למשתמש יש מסמכים רפואיים מועלים. הוסף המלצות מבוססות על תוצאות הבדיקות.
-- אם יש ערכים חריגים - המלץ על מעקב
-- אם יש בדיקות שצריכות חזרה - המלץ על תזמון
-
-חובה: התחל את שדה ה-rationale בביטוי כמו:
-- "לפי תוצאות הבדיקות שלך..."
-- "בהתבסס על המסמכים הרפואיים..."` : `אין מסמכים רפואיים זמינים. דלג לעדיפות הבאה.`}
-
-עדיפות שלישית - המלצות לפי גיל ומין (רק אם אין מספיק המלצות מעדיפויות קודמות):
-${hasDemographicData ? `
-למבוגרים מגיל 50+:
-- קולונוסקופיה: כל 10 שנים
-- בדיקת צפיפות עצם: לנשים מגיל 65+
-
-לנשים:
-- ממוגרפיה: בדיקה שנתית החל מגיל 40
-- בדיקת פאפ/צוואר הרחם: כל 3 שנים בגילאי 21-65
-
-לגברים:
-- בדיקת פרוסטטה (PSA): לדון עם רופא החל מגיל 50
-
-חובה: התחל את שדה ה-rationale בביטוי כמו:
-- "בהתאם לגילך..."
-- "כבדיקה שגרתית מומלצת..."` : ``}
-
-עדיפות רביעית - המלצות כלליות לבריאות:
-- בדיקת לחץ דם: שנתית למבוגרים מגיל 18+
-- בדיקת כולסטרול: כל 5 שנים החל מגיל 20
-- חיסון שפעת: שנתי לכל המבוגרים
-
-חובה: התחל את שדה ה-rationale בביטוי כמו:
-- "כחלק מבריאות מונעת..."
-- "כהמלצה כללית..."
-
-המלצות קיימות (אל תציע אותן או דומות להן שוב): ${existingTitlesList}
-
-אם אין לך המלצות חדשות ושונות, החזר מערך ריק.
-
-חשוב מאוד: כתוב את כל התוכן בעברית בלבד.
-
-עליך להחזיר JSON עם מערך בשם "recommendations" המכיל 0-4 המלצות חדשות. כל המלצה צריכה:
-- title: כותרת קצרה וברורה (בעברית)
-- category: אחד מ-"checkup", "vaccine", "lifestyle", "followup"
-- source: חובה! אחד מ-"survey", "document", "demographic", "general" - מציין את מקור ההמלצה
-- rationale: הסבר קצר למה זה מומלץ (בעברית, חובה להתחיל עם התייחסות למקור הנתונים)
-- suggestedTiming: "בחודש הקרוב", "בשלושה חודשים הקרובים", או "השנה"
-- priority: מספר 1-3 (1 הכי דחוף)
-- clinicianPrompt: מה לשאול את הרופא (בעברית, אופציונלי)`
-        : `You are a thoughtful and professional health assistant. Your role is to suggest routine health checkups, vaccines, and lifestyle recommendations.
-
-Important: You do NOT diagnose medical conditions. You only suggest commonly recommended screenings and follow-ups.
-
-Be conservative: Do not interpret borderline values as diagnoses. If critical or urgent findings are detected in documents, recommend immediate consultation with a clinician.${criticalWarning}
-
-PRIORITY ORDER FOR RECOMMENDATIONS (you MUST follow this order exactly):
-
-FIRST PRIORITY (Required) - Survey-based recommendations:
-${hasSurveyData ? `The user has ${surveys.length} health survey(s). You MUST start with recommendations based on this survey data.
-- If user reported high pain level (5+) - recommend seeing a doctor
-- If user reported specific symptoms - recommend relevant follow-up
-- If user reported low mood - recommend support or counseling
-- If symptoms persist over a week - recommend medical evaluation
-
-REQUIRED: Start the rationale field with phrases like:
-- "Based on your recent check-in..."
-- "According to your pain rating of..."
-- "Following the symptoms you reported..."
-- "Your latest survey indicates..."` : `No survey data available. Skip to next priority.`}
-
-SECOND PRIORITY - Document-based recommendations:
-${hasDocumentData ? `The user has uploaded medical documents. Add recommendations based on lab results.
-- If there are abnormal values - recommend follow-up
-- If tests need to be repeated - recommend scheduling
-
-REQUIRED: Start the rationale field with phrases like:
-- "Based on your lab results..."
-- "According to your medical documents..."
-- "Your test results show..."` : `No medical documents available. Skip to next priority.`}
-
-THIRD PRIORITY - Age and gender-based recommendations (only if not enough from previous priorities):
-${hasDemographicData ? `
-For Adults 50+:
-- Colonoscopy: Every 10 years
-- Bone density screening: For women 65+
-
-For Women:
-- Mammography: Annual screening starting at age 40
-- Pap smear/cervical screening: Every 3 years for ages 21-65
-
-For Men:
-- Prostate screening (PSA): Discuss with doctor starting at age 50
-
-REQUIRED: Start the rationale field with phrases like:
-- "Based on your age..."
-- "As a recommended routine screening..."` : ``}
-
-FOURTH PRIORITY - General health recommendations:
-- Blood pressure check: Annually for adults 18+
-- Cholesterol screening: Every 5 years starting at age 20
-- Flu vaccine: Annually for all adults
-
-REQUIRED: Start the rationale field with phrases like:
-- "As part of preventive health..."
-- "As a general recommendation..."
-
-EXISTING RECOMMENDATIONS (DO NOT suggest these or similar ones again): ${existingTitlesList}
-
-If you cannot think of any NEW and DIFFERENT recommendations, return an empty array.
-
-IMPORTANT: Respond ONLY in English. All text fields must be in English.
-
-Return JSON with an array called "recommendations" containing 0-4 NEW recommendations. Each should have:
-- title: Short, clear title (in English)
-- category: One of "checkup", "vaccine", "lifestyle", "followup"
-- source: REQUIRED! One of "survey", "document", "demographic", "general" - indicates the data source for this recommendation
-- rationale: Brief explanation (MUST start with reference to data source - survey/documents/age/general)
-- suggestedTiming: "This month", "Within 3 months", or "This year"
-- priority: Number 1-3 (1 is most urgent)
-- clinicianPrompt: What to ask your doctor (in English, optional)`;
 
       let surveyInsights = "";
       if (hasSurveyData && surveys.length > 0) {

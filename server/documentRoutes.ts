@@ -7,8 +7,9 @@ import Tesseract from "tesseract.js";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { PDFParse } from "pdf-parse";
 import { db } from "./db";
-import { medicalDocuments, type DocType, type ExtractionStatus, type ExtractedDocumentData } from "../shared/schema";
+import { medicalDocuments, type DocType, type ExtractionStatus, type ExtractedDocumentData, PromptLanguage } from "../shared/schema";
 import { eq, and, isNull, desc } from "drizzle-orm";
+import { getSystemPrompt } from "./systemPrompts";
 
 type ExtractionMethod = "embedded_text" | "ocr" | "none";
 type ExtractionResult = {
@@ -204,44 +205,10 @@ async function extractStructuredData(
   }
 
   const isHebrew = language === "he";
-
-  const systemPrompt = isHebrew
-    ? `אתה מחלץ מידע מובנה ממסמכים רפואיים.
-כללים:
-- אל תמציא ערכים; אם לא בטוח, השמט או השתמש ב-null
-- החזר JSON בלבד לפי הסכמה
-- שמור על יחידות כפי שנכתבו
-- לדגלים (flags), השתמש רק במה שכתוב במפורש (High/Low/Normal/H/L) או null
-
-סכמת הפלט:
-{
-  "docTypeGuess": "BLOOD_TEST|IMAGING|DOCTOR_NOTE|OTHER",
-  "docDateGuess": "YYYY-MM-DD או null",
-  "labs": [{"testName": "", "value": "", "unit": "", "refRange": null, "flag": null, "resultDate": null}],
-  "medsMentioned": ["שמות תרופות"],
-  "diagnosesMentioned": ["אבחנות"],
-  "followupStatements": ["הצהרות מעקב"],
-  "shortSummary": "עד 700 תווים",
-  "confidence": 0.0-1.0
-}`
-    : `You extract structured info from medical documents.
-Rules:
-- Do not invent values; if unsure, omit or set null
-- Output JSON only per schema
-- Preserve units as written
-- For flags, use only what's explicitly stated (High/Low/Normal/H/L) or null
-
-Output schema:
-{
-  "docTypeGuess": "BLOOD_TEST|IMAGING|DOCTOR_NOTE|OTHER",
-  "docDateGuess": "YYYY-MM-DD or null",
-  "labs": [{"testName": "", "value": "", "unit": "", "refRange": null, "flag": null, "resultDate": null}],
-  "medsMentioned": ["medication names"],
-  "diagnosesMentioned": ["diagnoses"],
-  "followupStatements": ["follow-up statements"],
-  "shortSummary": "up to 700 chars",
-  "confidence": 0.0-1.0
-}`;
+  const promptLanguage = isHebrew ? "he" : "en";
+  
+  // Get system prompt from database (falls back to default if not found)
+  const systemPrompt = await getSystemPrompt("document_extraction", promptLanguage as PromptLanguage);
 
   const userMessage = `Document type hint: ${docType}
 Locale: ${isHebrew ? "Israel/Hebrew" : "English"}

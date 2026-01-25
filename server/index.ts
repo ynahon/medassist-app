@@ -1,6 +1,7 @@
 import express from "express";
 import type { Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
+import { seedDefaultPrompts } from "./systemPrompts";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -230,6 +231,12 @@ function setupErrorHandler(app: express.Application) {
   setupErrorHandler(app);
 
   const port = parseInt(process.env.PORT || "5000", 10);
+  
+  // Seed default system prompts to database
+  seedDefaultPrompts().catch(err => {
+    console.error("Failed to seed default prompts:", err);
+  });
+  
   server.listen(
     {
       port,
