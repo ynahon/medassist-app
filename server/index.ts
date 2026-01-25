@@ -232,10 +232,13 @@ function setupErrorHandler(app: express.Application) {
 
   const port = parseInt(process.env.PORT || "5000", 10);
   
-  // Seed default system prompts to database
-  seedDefaultPrompts().catch(err => {
-    console.error("Failed to seed default prompts:", err);
-  });
+  // Seed default system prompts to database before server starts
+  try {
+    await seedDefaultPrompts();
+    console.log("[Server] System prompts seeding completed");
+  } catch (err) {
+    console.error("[Server] Failed to seed default prompts:", err);
+  }
   
   server.listen(
     {
