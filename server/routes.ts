@@ -428,13 +428,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/recommendations/generate", async (req, res) => {
     try {
-      const { userProfile, surveys, existingRecommendations, language, userId } = req.body;
+      const { userProfile, surveys: rawSurveys, existingRecommendations, language, userId } = req.body;
 
       if (!userProfile) {
         return res.status(400).json({ error: "User profile is required" });
       }
 
       const isHebrew = language === "he";
+      
+      // Sort surveys by date descending (newest first)
+      const surveys = (rawSurveys || []).slice().sort((a: any, b: any) => {
+        const dateA = new Date(a.date || a.createdAt || 0).getTime();
+        const dateB = new Date(b.date || b.createdAt || 0).getTime();
+        return dateB - dateA; // Newest first
+      });
+      
+      console.log("[Recommendations] Raw surveys received:", rawSurveys?.length || 0);
+      console.log("[Recommendations] Sorted surveys (newest first):", surveys.map((s: any) => s.date || s.createdAt));
 
       const addressedTitles = new Set(
         (existingRecommendations || [])
@@ -510,7 +520,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       let surveyInsights = "";
       if (hasSurveyData && surveys.length > 0) {
-        const latestSurvey = surveys[surveys.length - 1];
+        // surveys are now sorted newest first, so [0] is the latest
+        const latestSurvey = surveys[0];
         const surveyData = latestSurvey.responses || latestSurvey;
         
         const painLevel = surveyData.painLevel ?? surveyData.pain_level ?? null;
@@ -540,8 +551,8 @@ User Profile:
 - Date of Birth: ${userProfile.dateOfBirth || "Not provided"}
 - Gender: ${userProfile.gender || "Not provided"}
 ${surveyInsights}
-Survey History (${surveys?.length || 0} total surveys):
-${surveys?.slice(-3).map((s: any, i: number) => {
+Survey History (${surveys?.length || 0} total surveys, showing 3 most recent):
+${surveys?.slice(0, 3).map((s: any, i: number) => {
   const data = s.responses || s;
   return `Survey ${i + 1} (${s.date || "recent"}): Pain=${data.painLevel ?? "N/A"}, Feeling=${data.feeling || "N/A"}, Symptoms=${(data.symptoms || []).join(", ") || "none"}, Duration=${data.timing || "N/A"}`;
 }).join("\n") || "No surveys completed"}${documentContext}
@@ -549,12 +560,18 @@ ${surveys?.slice(-3).map((s: any, i: number) => {
 
       const prompt = `${systemPrompt}\n\n${userContext}\n\nRespond with valid JSON only.`;
       
+      // Log full context being sent to Gemini
+      console.log("\n========== GEMINI RECOMMENDATIONS REQUEST ==========");
       console.log("[Recommendations] Survey data available:", hasSurveyData ? surveys.length : 0);
       console.log("[Recommendations] Document data available:", hasDocumentData);
       console.log("[Recommendations] Demographic data available:", hasDemographicData);
       if (hasSurveyData) {
-        console.log("[Recommendations] Latest survey:", JSON.stringify(surveys[surveys.length - 1]));
+        console.log("[Recommendations] Latest survey (newest):", JSON.stringify(surveys[0]));
       }
+      console.log("[Recommendations] Existing titles to exclude:", existingTitlesList);
+      console.log("\n----- FULL PROMPT TO GEMINI -----");
+      console.log(prompt);
+      console.log("----- END PROMPT -----\n");
       
       const result = await geminiModel.generateContent({
         contents: [{ role: "user", parts: [{ text: prompt }] }],
