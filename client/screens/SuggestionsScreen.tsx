@@ -22,7 +22,6 @@ import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
-import { ConditionsAccordion } from "@/components/ConditionsAccordion";
 import { useTheme } from "@/hooks/useTheme";
 import {
   useApp,
@@ -353,6 +352,103 @@ export default function SuggestionsScreen() {
         {recommendation.rationale}
       </ThemedText>
 
+      {possibleConditions.length > 0 && recommendation.status === "pending" && pendingRecommendations[0]?.id === recommendation.id ? (
+        <View style={styles.inlineConditionsSection}>
+          <View style={[styles.conditionsSectionHeader, isRTL && { flexDirection: 'row-reverse' }]}>
+            <Feather name="alert-circle" size={16} color={theme.warning} />
+            <ThemedText type="body" style={[styles.conditionsSectionTitle, { color: theme.warning }]}>
+              {t.suggestions.possibleConditions?.title || "Possible Conditions"}
+            </ThemedText>
+          </View>
+          
+          {possibleConditions.map((condition, index) => (
+            <View key={condition.id || index} style={[styles.inlineConditionCard, { backgroundColor: theme.backgroundSecondary }]}>
+              <View style={[styles.conditionHeader, isRTL && { flexDirection: 'row-reverse' }]}>
+                <ThemedText type="body" style={[styles.conditionName, { textAlign }]}>
+                  {condition.name}
+                </ThemedText>
+                <View style={[
+                  styles.severityBadge,
+                  { backgroundColor: condition.severity === 'high' ? theme.error + '20' : condition.severity === 'moderate' ? theme.warning + '20' : theme.success + '20' }
+                ]}>
+                  <ThemedText type="caption" style={{ 
+                    color: condition.severity === 'high' ? theme.error : condition.severity === 'moderate' ? theme.warning : theme.success 
+                  }}>
+                    {condition.severity === 'high' 
+                      ? (t.suggestions.possibleConditions?.severityHigh || 'High')
+                      : condition.severity === 'moderate' 
+                        ? (t.suggestions.possibleConditions?.severityModerate || 'Moderate')
+                        : (t.suggestions.possibleConditions?.severityLow || 'Low')}
+                  </ThemedText>
+                </View>
+              </View>
+              
+              <View style={styles.probabilityRow}>
+                <View style={[styles.probabilityBar, { backgroundColor: theme.backgroundDefault }]}>
+                  <View style={[
+                    styles.probabilityFill,
+                    { 
+                      width: `${(condition.probability || 0.5) * 100}%`,
+                      backgroundColor: condition.severity === 'high' ? theme.error : condition.severity === 'moderate' ? theme.warning : theme.primary
+                    }
+                  ]} />
+                </View>
+                <ThemedText type="caption" style={{ color: theme.textSecondary }}>
+                  {Math.round((condition.probability || 0.5) * 100)}%
+                </ThemedText>
+              </View>
+              
+              {condition.summary ? (
+                <ThemedText type="small" style={[styles.conditionSummary, { color: theme.textSecondary, textAlign }]}>
+                  {condition.summary}
+                </ThemedText>
+              ) : null}
+              
+              {condition.whyItFits && condition.whyItFits.length > 0 ? (
+                <View style={styles.conditionDetailSection}>
+                  <ThemedText type="caption" style={[styles.conditionDetailLabel, { color: theme.primary, textAlign }]}>
+                    {t.suggestions.possibleConditions?.whyItFits || "Why it fits"}:
+                  </ThemedText>
+                  {condition.whyItFits.map((item, i) => (
+                    <View key={i} style={[styles.bulletItem, isRTL && { flexDirection: 'row-reverse' }]}>
+                      <ThemedText type="small" style={{ color: theme.textSecondary }}>{isRTL ? '•' : '•'} </ThemedText>
+                      <ThemedText type="small" style={{ color: theme.textSecondary, flex: 1, textAlign }}>{item}</ThemedText>
+                    </View>
+                  ))}
+                </View>
+              ) : null}
+              
+              {condition.redFlagsToWatch && condition.redFlagsToWatch.length > 0 ? (
+                <View style={styles.conditionDetailSection}>
+                  <ThemedText type="caption" style={[styles.conditionDetailLabel, { color: theme.error, textAlign }]}>
+                    {t.suggestions.possibleConditions?.redFlags || "Red flags to watch"}:
+                  </ThemedText>
+                  {condition.redFlagsToWatch.map((item, i) => (
+                    <View key={i} style={[styles.bulletItem, isRTL && { flexDirection: 'row-reverse' }]}>
+                      <ThemedText type="small" style={{ color: theme.error }}>! </ThemedText>
+                      <ThemedText type="small" style={{ color: theme.textSecondary, flex: 1, textAlign }}>{item}</ThemedText>
+                    </View>
+                  ))}
+                </View>
+              ) : null}
+              
+              {condition.whenToSeeDoctor ? (
+                <View style={styles.conditionDetailSection}>
+                  <ThemedText type="caption" style={[styles.conditionDetailLabel, { color: theme.primary, textAlign }]}>
+                    {t.suggestions.possibleConditions?.whenToSeeDoctor || "When to see a doctor"}:
+                  </ThemedText>
+                  <ThemedText type="small" style={{ color: theme.textSecondary, textAlign }}>{condition.whenToSeeDoctor}</ThemedText>
+                </View>
+              ) : null}
+            </View>
+          ))}
+          
+          <ThemedText type="caption" style={[styles.conditionsDisclaimer, { color: theme.textSecondary, textAlign: 'center' }]}>
+            {t.suggestions.possibleConditions?.disclaimer || "This is not a diagnosis. If symptoms worsen or red flags appear, seek medical care."}
+          </ThemedText>
+        </View>
+      ) : null}
+
       {recommendation.status === "pending" ? (
         <View style={[styles.actionButtons, isRTL && styles.actionButtonsRTL]}>
           <Pressable
@@ -488,28 +584,6 @@ export default function SuggestionsScreen() {
               </Button>
             )}
 
-            {possibleConditions.length > 0 && (
-              <ConditionsAccordion
-                conditions={possibleConditions}
-                isRTL={isRTL}
-                translations={{
-                  title: t.suggestions.possibleConditions?.title || "Possible Conditions",
-                  searchPlaceholder: t.suggestions.possibleConditions?.searchPlaceholder || "Search conditions...",
-                  expandAll: t.suggestions.possibleConditions?.expandAll || "Expand all",
-                  collapseAll: t.suggestions.possibleConditions?.collapseAll || "Collapse all",
-                  showDetailsByDefault: t.suggestions.possibleConditions?.showDetailsByDefault || "Show details by default",
-                  noConditions: t.suggestions.possibleConditions?.noConditions || "No conditions available",
-                  disclaimer: t.suggestions.possibleConditions?.disclaimer || "This is not a diagnosis. If symptoms worsen, change suddenly, or red flags appear, seek medical care.",
-                  whyItFits: t.suggestions.possibleConditions?.whyItFits || "Why it fits",
-                  redFlags: t.suggestions.possibleConditions?.redFlags || "Red flags to watch",
-                  selfCare: t.suggestions.possibleConditions?.selfCare || "Self-care tips",
-                  whenToSeeDoctor: t.suggestions.possibleConditions?.whenToSeeDoctor || "When to see a doctor",
-                  severityLow: t.suggestions.possibleConditions?.severityLow || "Low",
-                  severityModerate: t.suggestions.possibleConditions?.severityModerate || "Moderate",
-                  severityHigh: t.suggestions.possibleConditions?.severityHigh || "High",
-                }}
-              />
-            )}
           </>
         ) : generateMutation.isPending ? (
           <View style={styles.loadingContainer}>
@@ -827,18 +901,19 @@ const styles = StyleSheet.create({
   },
   actionButtons: {
     flexDirection: "row",
-    flexWrap: "wrap",
-    gap: Spacing.sm,
+    gap: Spacing.xs,
   },
   actionButtonsRTL: {
     flexDirection: "row-reverse",
   },
   actionButton: {
+    flex: 1,
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "center",
     gap: Spacing.xs,
     paddingVertical: Spacing.sm,
-    paddingHorizontal: Spacing.md,
+    paddingHorizontal: Spacing.xs,
     borderRadius: BorderRadius.sm,
   },
   statusBadge: {
@@ -939,5 +1014,76 @@ const styles = StyleSheet.create({
     maxWidth: 320,
     borderRadius: BorderRadius.lg,
     padding: Spacing.xl,
+  },
+  inlineConditionsSection: {
+    marginTop: Spacing.lg,
+    marginBottom: Spacing.md,
+    paddingTop: Spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: "rgba(0, 0, 0, 0.1)",
+  },
+  conditionsSectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+    marginBottom: Spacing.md,
+  },
+  conditionsSectionTitle: {
+    fontWeight: "600",
+  },
+  inlineConditionCard: {
+    padding: Spacing.md,
+    borderRadius: BorderRadius.md,
+    marginBottom: Spacing.sm,
+  },
+  conditionHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: Spacing.sm,
+  },
+  conditionName: {
+    flex: 1,
+    fontWeight: "600",
+  },
+  severityBadge: {
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: Spacing.xs,
+    borderRadius: BorderRadius.sm,
+  },
+  probabilityRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+    marginBottom: Spacing.sm,
+  },
+  probabilityBar: {
+    flex: 1,
+    height: 6,
+    borderRadius: 3,
+    overflow: "hidden",
+  },
+  probabilityFill: {
+    height: "100%",
+    borderRadius: 3,
+  },
+  conditionSummary: {
+    marginBottom: Spacing.sm,
+  },
+  conditionDetailSection: {
+    marginTop: Spacing.sm,
+  },
+  conditionDetailLabel: {
+    fontWeight: "600",
+    marginBottom: Spacing.xs,
+  },
+  bulletItem: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    marginLeft: Spacing.sm,
+  },
+  conditionsDisclaimer: {
+    marginTop: Spacing.md,
+    fontStyle: "italic",
   },
 });
