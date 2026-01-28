@@ -587,6 +587,7 @@ ${surveys?.slice(0, 3).map((s: any, i: number) => {
       console.log("[Recommendations] AI raw response sources:", 
         (parsed.recommendations || []).map((r: any) => ({ title: r.title?.substring(0, 30), source: r.source }))
       );
+      console.log("[Recommendations] AI raw possibleConditions:", JSON.stringify(parsed.possibleConditions || [], null, 2));
 
       const sourcePriority: Record<string, number> = {
         survey: 1,
@@ -613,19 +614,44 @@ ${surveys?.slice(0, 3).map((s: any, i: number) => {
           return (a.priority || 3) - (b.priority || 3);
         });
 
-      const possibleConditions = (parsed.possibleConditions || []).map((c: any) => ({
-        id: c.id || c.name,
-        name: c.name,
-        probability: typeof c.probability === 'number' ? c.probability : (c.confidence || 0),
-        severity: c.severity || 'low',
-        summary: c.summary,
-        whyItFits: c.whyItFits || [],
+      // Extract conditions from top-level possibleConditions array
+      let allConditions: any[] = parsed.possibleConditions || [];
+      
+      // Also extract conditions embedded inside each recommendation
+      for (const rec of (parsed.recommendations || [])) {
+        if (rec.possibleConditions && Array.isArray(rec.possibleConditions)) {
+          allConditions = allConditions.concat(rec.possibleConditions);
+        }
+      }
+      
+      // Map confidence strings to numeric probabilities
+      const confidenceToNumber = (conf: string | number | undefined): number => {
+        if (typeof conf === 'number') return conf;
+        if (conf === 'high') return 0.75;
+        if (conf === 'moderate') return 0.5;
+        if (conf === 'low') return 0.25;
+        return 0.5;
+      };
+      
+      // Normalize conditions to standard format
+      const possibleConditions = allConditions.map((c: any) => ({
+        id: c.id || c.condition || c.name,
+        name: c.condition || c.name,
+        probability: typeof c.probability === 'number' ? c.probability : confidenceToNumber(c.confidence),
+        severity: c.urgency === 'urgent' ? 'high' : (c.urgency === 'moderate' || c.urgency === 'moderate to urgent') ? 'moderate' : (c.severity || 'low'),
+        summary: c.typicalPresentation || c.summary || '',
+        whyItFits: c.matchingSymptoms || c.whyItFits || [],
         redFlagsToWatch: c.redFlagsToWatch || [],
         selfCare: c.selfCare || [],
-        whenToSeeDoctor: c.whenToSeeDoctor,
+        whenToSeeDoctor: c.recommendation || c.whenToSeeDoctor || '',
+        suggestedTests: c.suggestedTests || [],
+        hebrewName: c.hebrewName || '',
       }));
       
       console.log("[Recommendations] Possible conditions returned:", possibleConditions.length);
+      if (possibleConditions.length > 0) {
+        console.log("[Recommendations] Conditions:", JSON.stringify(possibleConditions, null, 2));
+      }
 
       res.json({
         success: true,
