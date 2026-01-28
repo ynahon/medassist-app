@@ -222,12 +222,15 @@ export async function getSystemPrompt(
       .limit(1);
 
     if (result.length > 0) {
+      console.log(`[SystemPrompts] ✓ Loaded "${promptType}/${language}" from DATABASE (version ${result[0].version}, ${result[0].promptText.length} chars)`);
       return result[0].promptText;
     }
 
+    console.log(`[SystemPrompts] ⚠ Using DEFAULT prompt for "${promptType}/${language}" (not found in database)`);
     return DEFAULT_PROMPTS[promptType][language];
   } catch (error) {
-    console.error(`Error fetching system prompt (${promptType}/${language}):`, error);
+    console.error(`[SystemPrompts] ✗ Error fetching "${promptType}/${language}" from database:`, error);
+    console.log(`[SystemPrompts] ⚠ Falling back to DEFAULT prompt for "${promptType}/${language}"`);
     return DEFAULT_PROMPTS[promptType][language];
   }
 }
