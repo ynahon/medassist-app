@@ -185,4 +185,21 @@ export const insertSystemPromptSchema = createInsertSchema(systemPrompts).omit({
 export type InsertSystemPrompt = z.infer<typeof insertSystemPromptSchema>;
 export type SystemPrompt = typeof systemPrompts.$inferSelect;
 
+// Possible conditions for the recommendation explorer UI
+export const conditionSeverityEnum = ["low", "moderate", "high"] as const;
+export type ConditionSeverity = (typeof conditionSeverityEnum)[number];
+
+export interface PossibleCondition {
+  id?: string;
+  name: string;
+  probability?: number; // 0..1 preferred, will normalize 0..100 values
+  confidence?: number;
+  severity?: ConditionSeverity;
+  summary?: string;
+  whyItFits?: string[];
+  redFlagsToWatch?: string[];
+  selfCare?: string[];
+  whenToSeeDoctor?: string;
+}
+
 export * from "./models/chat";

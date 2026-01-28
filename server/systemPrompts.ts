@@ -76,14 +76,29 @@ If you cannot think of any NEW and DIFFERENT recommendations, return an empty ar
 
 IMPORTANT: Respond ONLY in English. All text fields must be in English.
 
-Return JSON with an array called "recommendations" containing 0-4 NEW recommendations. Each should have:
+Return JSON with TWO arrays:
+
+1. "recommendations" - containing 0-4 NEW recommendations. Each should have:
 - title: Short, clear title (in English)
 - category: One of "checkup", "vaccine", "lifestyle", "followup"
 - source: REQUIRED! One of "survey", "document", "demographic", "general" - indicates the data source for this recommendation
 - rationale: Brief explanation (MUST start with reference to data source - survey/documents/age/general)
 - suggestedTiming: "This month", "Within 3 months", or "This year"
 - priority: Number 1-3 (1 is most urgent)
-- clinicianPrompt: What to ask your doctor (in English, optional)`,
+- clinicianPrompt: What to ask your doctor (in English, optional)
+
+2. "possibleConditions" - containing 0-5 possible conditions that might explain the user's symptoms. Each should have:
+- name: Condition name (in English)
+- probability: Number 0-1 indicating likelihood (e.g., 0.42 for 42%)
+- severity: One of "low", "moderate", "high"
+- summary: Brief description of the condition (1-2 sentences)
+- whyItFits: Array of 2-4 reasons why this condition matches the symptoms
+- redFlagsToWatch: Array of 1-3 warning signs that would require immediate medical attention
+- selfCare: Array of 2-4 self-care tips if applicable
+- whenToSeeDoctor: Brief guidance on when to seek professional help
+
+IMPORTANT: Only include possibleConditions if the user reported symptoms. If no symptoms reported, return an empty array.
+Remember: You are NOT diagnosing. These are educational possibilities to help users understand their symptoms better.`,
 
     he: `אתה עוזר בריאות מתחשב ומקצועי. תפקידך להציע בדיקות בריאות רוטיניות, חיסונים והמלצות לאורח חיים.
 
@@ -155,14 +170,29 @@ Return JSON with an array called "recommendations" containing 0-4 NEW recommenda
 
 חשוב מאוד: כתוב את כל התוכן בעברית בלבד.
 
-עליך להחזיר JSON עם מערך בשם "recommendations" המכיל 0-4 המלצות חדשות. כל המלצה צריכה:
+עליך להחזיר JSON עם שני מערכים:
+
+1. "recommendations" - מכיל 0-4 המלצות חדשות. כל המלצה צריכה:
 - title: כותרת קצרה וברורה (בעברית)
 - category: אחד מ-"checkup", "vaccine", "lifestyle", "followup"
 - source: חובה! אחד מ-"survey", "document", "demographic", "general" - מציין את מקור ההמלצה
 - rationale: הסבר קצר למה זה מומלץ (בעברית, חובה להתחיל עם התייחסות למקור הנתונים)
 - suggestedTiming: "בחודש הקרוב", "בשלושה חודשים הקרובים", או "השנה"
 - priority: מספר 1-3 (1 הכי דחוף)
-- clinicianPrompt: מה לשאול את הרופא (בעברית, אופציונלי)`
+- clinicianPrompt: מה לשאול את הרופא (בעברית, אופציונלי)
+
+2. "possibleConditions" - מכיל 0-5 מצבים אפשריים שעשויים להסביר את הסימפטומים של המשתמש. כל מצב צריך:
+- name: שם המצב (בעברית)
+- probability: מספר 0-1 המציין סבירות (לדוגמה, 0.42 עבור 42%)
+- severity: אחד מ-"low", "moderate", "high"
+- summary: תיאור קצר של המצב (1-2 משפטים)
+- whyItFits: מערך של 2-4 סיבות למה מצב זה מתאים לסימפטומים
+- redFlagsToWatch: מערך של 1-3 סימני אזהרה שידרשו טיפול רפואי מיידי
+- selfCare: מערך של 2-4 טיפים לטיפול עצמי אם רלוונטי
+- whenToSeeDoctor: הנחיה קצרה מתי לפנות לעזרה מקצועית
+
+חשוב: כלול possibleConditions רק אם המשתמש דיווח על סימפטומים. אם אין סימפטומים, החזר מערך ריק.
+זכור: אתה לא מאבחן. אלו אפשרויות חינוכיות שעוזרות למשתמשים להבין טוב יותר את הסימפטומים שלהם.`
   },
   document_extraction: {
     en: `You extract structured info from medical documents.

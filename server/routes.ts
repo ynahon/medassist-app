@@ -613,9 +613,24 @@ ${surveys?.slice(0, 3).map((s: any, i: number) => {
           return (a.priority || 3) - (b.priority || 3);
         });
 
+      const possibleConditions = (parsed.possibleConditions || []).map((c: any) => ({
+        id: c.id || c.name,
+        name: c.name,
+        probability: typeof c.probability === 'number' ? c.probability : (c.confidence || 0),
+        severity: c.severity || 'low',
+        summary: c.summary,
+        whyItFits: c.whyItFits || [],
+        redFlagsToWatch: c.redFlagsToWatch || [],
+        selfCare: c.selfCare || [],
+        whenToSeeDoctor: c.whenToSeeDoctor,
+      }));
+      
+      console.log("[Recommendations] Possible conditions returned:", possibleConditions.length);
+
       res.json({
         success: true,
         recommendations: newRecommendations,
+        possibleConditions,
         documentCount,
         noMoreRecommendations: newRecommendations.length === 0,
       });

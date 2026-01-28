@@ -22,6 +22,7 @@ import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
+import { ConditionsAccordion } from "@/components/ConditionsAccordion";
 import { useTheme } from "@/hooks/useTheme";
 import {
   useApp,
@@ -40,6 +41,19 @@ interface GenerateRecommendationsPayload {
   userId?: string;
 }
 
+interface PossibleCondition {
+  id?: string;
+  name: string;
+  probability?: number;
+  confidence?: number;
+  severity?: "low" | "moderate" | "high";
+  summary?: string;
+  whyItFits?: string[];
+  redFlagsToWatch?: string[];
+  selfCare?: string[];
+  whenToSeeDoctor?: string;
+}
+
 interface GenerateRecommendationsResponse {
   success: boolean;
   recommendations: {
@@ -50,6 +64,7 @@ interface GenerateRecommendationsResponse {
     priority: number;
     clinicianPrompt?: string;
   }[];
+  possibleConditions?: PossibleCondition[];
   documentCount?: number;
   noMoreRecommendations?: boolean;
 }
@@ -95,6 +110,7 @@ export default function SuggestionsScreen() {
   const [statusReason, setStatusReason] = useState("");
   const [lastDocumentCount, setLastDocumentCount] = useState<number | null>(null);
   const [noMoreRecommendations, setNoMoreRecommendations] = useState(false);
+  const [possibleConditions, setPossibleConditions] = useState<PossibleCondition[]>([]);
 
   const generateMutation = useMutation<GenerateRecommendationsResponse, Error, GenerateRecommendationsPayload>({
     mutationFn: async (payload) => {
@@ -103,6 +119,9 @@ export default function SuggestionsScreen() {
     },
     onSuccess: async (data) => {
       setLastDocumentCount(data.documentCount || 0);
+      if (data.possibleConditions && data.possibleConditions.length > 0) {
+        setPossibleConditions(data.possibleConditions);
+      }
       if (data.noMoreRecommendations || (data.recommendations && data.recommendations.length === 0)) {
         setNoMoreRecommendations(true);
       } else {
@@ -467,6 +486,29 @@ export default function SuggestionsScreen() {
                   t.suggestions.getMore || "Get More Recommendations"
                 )}
               </Button>
+            )}
+
+            {possibleConditions.length > 0 && (
+              <ConditionsAccordion
+                conditions={possibleConditions}
+                isRTL={isRTL}
+                translations={{
+                  title: t.suggestions.possibleConditions?.title || "Possible Conditions",
+                  searchPlaceholder: t.suggestions.possibleConditions?.searchPlaceholder || "Search conditions...",
+                  expandAll: t.suggestions.possibleConditions?.expandAll || "Expand all",
+                  collapseAll: t.suggestions.possibleConditions?.collapseAll || "Collapse all",
+                  showDetailsByDefault: t.suggestions.possibleConditions?.showDetailsByDefault || "Show details by default",
+                  noConditions: t.suggestions.possibleConditions?.noConditions || "No conditions available",
+                  disclaimer: t.suggestions.possibleConditions?.disclaimer || "This is not a diagnosis. If symptoms worsen, change suddenly, or red flags appear, seek medical care.",
+                  whyItFits: t.suggestions.possibleConditions?.whyItFits || "Why it fits",
+                  redFlags: t.suggestions.possibleConditions?.redFlags || "Red flags to watch",
+                  selfCare: t.suggestions.possibleConditions?.selfCare || "Self-care tips",
+                  whenToSeeDoctor: t.suggestions.possibleConditions?.whenToSeeDoctor || "When to see a doctor",
+                  severityLow: t.suggestions.possibleConditions?.severityLow || "Low",
+                  severityModerate: t.suggestions.possibleConditions?.severityModerate || "Moderate",
+                  severityHigh: t.suggestions.possibleConditions?.severityHigh || "High",
+                }}
+              />
             )}
           </>
         ) : generateMutation.isPending ? (
