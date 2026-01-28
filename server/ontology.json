@@ -1,0 +1,467 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Health Assistant Ontology Schema",
+  "description": "JSON Schema representation of the Health Assistant Ontology",
+  
+  "definitions": {
+    "User": {
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "age": { "type": "integer", "minimum": 0 },
+        "gender": { 
+          "type": "string",
+          "enum": ["male", "female", "other"]
+        },
+        "surveyCount": { "type": "integer", "minimum": 0 },
+        "hasSurveyData": { "type": "boolean" },
+        "hasDocumentData": { "type": "boolean" },
+        "hasDemographicData": { "type": "boolean" },
+        "surveys": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/HealthSurvey" }
+        },
+        "documents": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/MedicalDocument" }
+        },
+        "existingRecommendations": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Titles of existing recommendations to avoid duplicates"
+        }
+      },
+      "required": ["userId"]
+    },
+    
+    "HealthSurvey": {
+      "type": "object",
+      "properties": {
+        "surveyId": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "painLevel": { 
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10,
+          "description": "Pain rating scale, 5+ is considered high"
+        },
+        "symptoms": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": { "type": "string" },
+              "duration": { "type": "string" },
+              "durationDays": { 
+                "type": "integer",
+                "description": "Duration in days, >7 triggers recommendation"
+              }
+            }
+          }
+        },
+        "mood": {
+          "type": "string",
+          "enum": ["high", "normal", "low"],
+          "description": "low mood triggers support recommendation"
+        }
+      },
+      "required": ["surveyId", "timestamp"]
+    },
+    
+    "MedicalDocument": {
+      "type": "object",
+      "properties": {
+        "documentId": { "type": "string" },
+        "documentType": {
+          "type": "string",
+          "enum": ["lab_result", "imaging", "prescription", "report", "other"]
+        },
+        "uploadDate": { "type": "string", "format": "date-time" },
+        "labResults": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/LabResult" }
+        },
+        "hasCriticalFinding": { 
+          "type": "boolean",
+          "description": "Triggers immediate consultation recommendation"
+        },
+        "criticalFindings": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      },
+      "required": ["documentId", "documentType"]
+    },
+    
+    "LabResult": {
+      "type": "object",
+      "properties": {
+        "testName": { "type": "string" },
+        "value": { "type": "number" },
+        "unit": { "type": "string" },
+        "normalRange": {
+          "type": "object",
+          "properties": {
+            "min": { "type": "number" },
+            "max": { "type": "number" }
+          }
+        },
+        "isAbnormal": { 
+          "type": "boolean",
+          "description": "Triggers follow-up recommendation"
+        },
+        "needsRepeat": { "type": "boolean" }
+      },
+      "required": ["testName", "value"]
+    },
+    
+    "Recommendation": {
+      "type": "object",
+      "properties": {
+        "title": { 
+          "type": "string",
+          "description": "Short, clear title in English"
+        },
+        "category": {
+          "type": "string",
+          "enum": ["checkup", "vaccine", "lifestyle", "followup"],
+          "description": "Type of recommendation"
+        },
+        "source": {
+          "type": "string",
+          "enum": ["survey", "document", "demographic", "general"],
+          "description": "Data source that triggered this recommendation"
+        },
+        "rationale": {
+          "type": "string",
+          "description": "Must start with source-specific prefix. Survey: 'Based on your recent check-in...', Document: 'Based on your lab results...', Demographic: 'Based on your age...', General: 'As part of preventive health...'"
+        },
+        "suggestedTiming": {
+          "type": "string",
+          "enum": ["This month", "Within 3 months", "This year"],
+          "description": "Recommended timeframe"
+        },
+        "priority": {
+          "type": "integer",
+          "enum": [1, 2, 3],
+          "description": "1=urgent, 2=moderate, 3=low"
+        },
+        "clinicianPrompt": {
+          "type": "string",
+          "description": "Optional: What to ask your doctor"
+        },
+        "possibleConditions": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/PossibleCondition" },
+          "description": "Optional: Possible conditions that may explain symptoms (for informational purposes only)"
+        }
+      },
+      "required": ["title", "category", "source", "rationale", "suggestedTiming", "priority"]
+    },
+    
+    "PossibleCondition": {
+      "type": "object",
+      "properties": {
+        "condition": {
+          "type": "string",
+          "description": "Name of possible condition in English"
+        },
+        "hebrewName": {
+          "type": "string",
+          "description": "Name in Hebrew (e.g., אבנים בכיס מרה)"
+        },
+        "confidence": {
+          "type": "string",
+          "enum": ["high", "moderate", "low"],
+          "description": "How well symptoms match the pattern"
+        },
+        "matchingSymptoms": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "List of user symptoms that match this condition"
+        },
+        "urgency": {
+          "type": "string",
+          "enum": ["emergency", "urgent", "moderate", "routine"],
+          "description": "emergency=call ambulance, urgent=within hours/days, moderate=within 1-2 weeks, routine=schedule when convenient"
+        },
+        "recommendation": {
+          "type": "string",
+          "description": "What action to take (e.g., 'See gastroenterologist within 1 week')"
+        },
+        "suggestedTests": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Tests that may be needed for diagnosis"
+        },
+        "disclaimer": {
+          "type": "string",
+          "const": "This is not a diagnosis. Only a healthcare professional can diagnose this condition after proper examination and tests.",
+          "description": "REQUIRED disclaimer - must always be present"
+        }
+      },
+      "required": ["condition", "confidence", "matchingSymptoms", "urgency", "recommendation", "disclaimer"]
+    },
+    
+    "RecommendationResponse": {
+      "type": "object",
+      "properties": {
+        "recommendations": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/Recommendation" },
+          "minItems": 0,
+          "maxItems": 4,
+          "description": "0-4 recommendations, prioritizing survey > document > demographic > general"
+        }
+      },
+      "required": ["recommendations"]
+    },
+    
+    "PriorityOrder": {
+      "type": "object",
+      "description": "Defines the order in which recommendations should be generated",
+      "properties": {
+        "first": {
+          "type": "string",
+          "const": "survey",
+          "description": "Survey-based recommendations (required if data exists)"
+        },
+        "second": {
+          "type": "string",
+          "const": "document",
+          "description": "Document-based recommendations"
+        },
+        "third": {
+          "type": "string",
+          "const": "demographic",
+          "description": "Age and gender-based recommendations"
+        },
+        "fourth": {
+          "type": "string",
+          "const": "general",
+          "description": "General health recommendations"
+        }
+      }
+    },
+    
+    "ScreeningGuideline": {
+      "type": "object",
+      "properties": {
+        "name": { 
+          "type": "string",
+          "enum": [
+            "colonoscopy",
+            "bone_density",
+            "mammography",
+            "pap_smear",
+            "prostate_screening",
+            "blood_pressure",
+            "cholesterol",
+            "flu_vaccine"
+          ]
+        },
+        "targetDemographic": {
+          "type": "object",
+          "properties": {
+            "minAge": { "type": "integer" },
+            "maxAge": { "type": "integer" },
+            "gender": { "type": "string", "enum": ["male", "female", "any"] }
+          }
+        },
+        "frequency": { "type": "string" },
+        "category": { 
+          "type": "string",
+          "enum": ["checkup", "vaccine"]
+        },
+        "priority": { "type": "integer", "enum": [1, 2, 3] }
+      }
+    },
+    
+    "InferenceRule": {
+      "type": "object",
+      "properties": {
+        "ruleId": { "type": "string" },
+        "name": { "type": "string" },
+        "condition": { "type": "string" },
+        "action": { "type": "string" },
+        "priority": { "type": "integer" },
+        "timing": { "type": "string" },
+        "category": { "type": "string" }
+      }
+    },
+    
+    "Constraint": {
+      "type": "object",
+      "properties": {
+        "noDiagnosis": {
+          "type": "boolean",
+          "const": true,
+          "description": "System does not diagnose conditions"
+        },
+        "conservativeInterpretation": {
+          "type": "boolean",
+          "const": true,
+          "description": "Do not interpret borderline values as diagnoses"
+        },
+        "immediateConsultationForCritical": {
+          "type": "boolean",
+          "const": true,
+          "description": "Recommend immediate clinician consultation for critical findings"
+        },
+        "englishOnly": {
+          "type": "boolean",
+          "const": true,
+          "description": "All text must be in English"
+        },
+        "maxRecommendations": {
+          "type": "integer",
+          "const": 4,
+          "description": "Maximum 4 recommendations per request"
+        },
+        "noRepeatRecommendations": {
+          "type": "boolean",
+          "const": true,
+          "description": "Do not suggest existing recommendations"
+        }
+      }
+    }
+  },
+  
+  "screeningGuidelines": [
+    {
+      "name": "colonoscopy",
+      "targetDemographic": { "minAge": 50, "gender": "any" },
+      "frequency": "Every 10 years",
+      "category": "checkup",
+      "priority": 3
+    },
+    {
+      "name": "bone_density",
+      "targetDemographic": { "minAge": 65, "gender": "female" },
+      "frequency": "As recommended by physician",
+      "category": "checkup",
+      "priority": 3
+    },
+    {
+      "name": "mammography",
+      "targetDemographic": { "minAge": 40, "gender": "female" },
+      "frequency": "Annually",
+      "category": "checkup",
+      "priority": 3
+    },
+    {
+      "name": "pap_smear",
+      "targetDemographic": { "minAge": 21, "maxAge": 65, "gender": "female" },
+      "frequency": "Every 3 years",
+      "category": "checkup",
+      "priority": 3
+    },
+    {
+      "name": "prostate_screening",
+      "targetDemographic": { "minAge": 50, "gender": "male" },
+      "frequency": "Discuss with doctor",
+      "category": "checkup",
+      "priority": 3
+    },
+    {
+      "name": "blood_pressure",
+      "targetDemographic": { "minAge": 18, "gender": "any" },
+      "frequency": "Annually",
+      "category": "checkup",
+      "priority": 3
+    },
+    {
+      "name": "cholesterol",
+      "targetDemographic": { "minAge": 20, "gender": "any" },
+      "frequency": "Every 5 years",
+      "category": "checkup",
+      "priority": 3
+    },
+    {
+      "name": "flu_vaccine",
+      "targetDemographic": { "minAge": 18, "gender": "any" },
+      "frequency": "Annually",
+      "category": "vaccine",
+      "priority": 3
+    }
+  ],
+  
+  "inferenceRules": [
+    {
+      "ruleId": "R1",
+      "name": "High Pain Rule",
+      "condition": "painLevel >= 5",
+      "action": "Recommend seeing a doctor",
+      "priority": 1,
+      "timing": "This month",
+      "category": "followup"
+    },
+    {
+      "ruleId": "R2",
+      "name": "Low Mood Rule",
+      "condition": "mood == 'low'",
+      "action": "Recommend support or counseling",
+      "priority": 1,
+      "timing": "Within 3 months",
+      "category": "followup"
+    },
+    {
+      "ruleId": "R3",
+      "name": "Persistent Symptom Rule",
+      "condition": "symptomDurationDays > 7",
+      "action": "Recommend medical evaluation",
+      "priority": 2,
+      "timing": "Within 3 months",
+      "category": "followup"
+    },
+    {
+      "ruleId": "R4",
+      "name": "Abnormal Lab Rule",
+      "condition": "labResult.isAbnormal == true",
+      "action": "Recommend follow-up",
+      "priority": 2,
+      "timing": "Within 3 months",
+      "category": "followup"
+    },
+    {
+      "ruleId": "R5",
+      "name": "Critical Finding Rule",
+      "condition": "document.hasCriticalFinding == true",
+      "action": "Recommend IMMEDIATE consultation",
+      "priority": 1,
+      "timing": "This month",
+      "category": "followup"
+    }
+  ],
+  
+  "rationaleTemplates": {
+    "survey": [
+      "Based on your recent check-in...",
+      "According to your pain rating of {painLevel}...",
+      "Following the symptoms you reported...",
+      "Your latest survey indicates..."
+    ],
+    "document": [
+      "Based on your lab results...",
+      "According to your medical documents...",
+      "Your test results show..."
+    ],
+    "demographic": [
+      "Based on your age...",
+      "As a recommended routine screening..."
+    ],
+    "general": [
+      "As part of preventive health...",
+      "As a general recommendation..."
+    ]
+  },
+  
+  "constraints": {
+    "noDiagnosis": true,
+    "conservativeInterpretation": true,
+    "immediateConsultationForCritical": true,
+    "englishOnly": true,
+    "maxRecommendations": 4,
+    "noRepeatRecommendations": true
+  }
+}
