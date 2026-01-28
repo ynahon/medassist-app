@@ -1,7 +1,8 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "Health Assistant Ontology Schema",
-  "description": "JSON Schema representation of the Health Assistant Ontology",
+  "title": "Health Assistant Ontology Schema - With Medical Condition Inference",
+  "description": "JSON Schema for generating health recommendations with possible medical conditions based on survey data",
+  "version": "3.0",
   
   "definitions": {
     "User": {
@@ -13,22 +14,31 @@
           "type": "string",
           "enum": ["male", "female", "other"]
         },
-        "surveyCount": { "type": "integer", "minimum": 0 },
-        "hasSurveyData": { "type": "boolean" },
-        "hasDocumentData": { "type": "boolean" },
-        "hasDemographicData": { "type": "boolean" },
+        "surveyCount": { "type": "integer", "minimum": 0, "default": 0 },
+        "hasSurveyData": { "type": "boolean", "default": false },
+        "hasDocumentData": { "type": "boolean", "default": false },
+        "hasDemographicData": { "type": "boolean", "default": true },
         "surveys": {
           "type": "array",
-          "items": { "$ref": "#/definitions/HealthSurvey" }
+          "items": { "$ref": "#/definitions/HealthSurvey" },
+          "default": []
         },
         "documents": {
           "type": "array",
-          "items": { "$ref": "#/definitions/MedicalDocument" }
+          "items": { "$ref": "#/definitions/MedicalDocument" },
+          "default": []
         },
         "existingRecommendations": {
           "type": "array",
           "items": { "type": "string" },
-          "description": "Titles of existing recommendations to avoid duplicates"
+          "description": "Titles of existing recommendations to avoid duplicates",
+          "default": []
+        },
+        "highRiskContexts": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "pregnancy, immunocompromised, anticoagulation, recent_surgery, diabetes, cardiac_history, neurological_disease, recent_trauma, elderly",
+          "default": []
         }
       },
       "required": ["userId"]
@@ -43,26 +53,78 @@
           "type": "integer",
           "minimum": 0,
           "maximum": 10,
-          "description": "Pain rating scale, 5+ is considered high"
+          "description": "Pain rating 0-10. IMPORTANT: High pain (>=5) alone does NOT make urgent unless combined with red flags or concerning patterns"
+        },
+        "painLocation": {
+          "type": "string",
+          "description": "Where the pain is located (e.g., 'chest', 'abdomen', 'head', 'lower back', 'upper right abdomen')"
+        },
+        "painCharacter": {
+          "type": "string",
+          "enum": ["atypical", "familiar"],
+          "description": "atypical=new/different (MORE concerning), familiar=chronic known pattern (LESS concerning even if 10/10)",
+          "default": "atypical"
         },
         "symptoms": {
           "type": "array",
           "items": {
             "type": "object",
             "properties": {
-              "name": { "type": "string" },
+              "name": { 
+                "type": "string",
+                "description": "Symptom name (e.g., 'nausea', 'headache', 'fever', 'shortness of breath', 'abdominal pain')"
+              },
+              "severity": {
+                "type": "string",
+                "enum": ["mild", "moderate", "severe"],
+                "default": "moderate"
+              },
               "duration": { "type": "string" },
               "durationDays": { 
                 "type": "integer",
-                "description": "Duration in days, >7 triggers recommendation"
+                "description": "Duration in days. >7 days = persistent symptom trigger"
+              },
+              "onsetPattern": {
+                "type": "string",
+                "enum": ["sudden", "acute", "subacute", "chronic"],
+                "description": "sudden=<1hr (HIGH concern), acute=hours-days, subacute=days-weeks, chronic=weeks-months (lower concern)",
+                "default": "acute"
+              },
+              "progression": {
+                "type": "string",
+                "enum": ["rapidly_worsening", "gradually_worsening", "stable", "improving", "fluctuating_familiar"],
+                "description": "rapidly_worsening=hours (URGENT), fluctuating_familiar=known pattern (lower concern)",
+                "default": "stable"
+              },
+              "isRedFlag": {
+                "type": "boolean",
+                "description": "True if red flag symptom (chest pain with radiation, sudden severe headache, etc.)",
+                "default": false
+              },
+              "redFlagType": {
+                "type": "string",
+                "description": "If isRedFlag=true, specify type: chest_pain_with_radiation, sudden_severe_headache, etc."
+              },
+              "associatedSymptoms": {
+                "type": "array",
+                "items": { "type": "string" },
+                "description": "Other symptoms occurring together (helps with condition inference)"
               }
-            }
+            },
+            "required": ["name"]
           }
         },
         "mood": {
           "type": "string",
           "enum": ["high", "normal", "low"],
-          "description": "low mood triggers support recommendation"
+          "description": "low mood triggers support/counseling recommendation",
+          "default": "normal"
+        },
+        "functionalImpairment": {
+          "type": "string",
+          "enum": ["none", "mild", "moderate", "severe"],
+          "description": "Impact on daily activities",
+          "default": "none"
         }
       },
       "required": ["surveyId", "timestamp"]
@@ -83,7 +145,8 @@
         },
         "hasCriticalFinding": { 
           "type": "boolean",
-          "description": "Triggers immediate consultation recommendation"
+          "description": "Triggers immediate consultation recommendation with Priority 1",
+          "default": false
         },
         "criticalFindings": {
           "type": "array",
@@ -108,19 +171,24 @@
         },
         "isAbnormal": { 
           "type": "boolean",
-          "description": "Triggers follow-up recommendation"
+          "description": "Triggers follow-up recommendation",
+          "default": false
         },
-        "needsRepeat": { "type": "boolean" }
+        "needsRepeat": { 
+          "type": "boolean",
+          "default": false
+        }
       },
       "required": ["testName", "value"]
     },
     
     "Recommendation": {
       "type": "object",
+      "description": "Single recommendation with possible conditions",
       "properties": {
         "title": { 
           "type": "string",
-          "description": "Short, clear title in English"
+          "description": "Short, clear title (e.g., 'Follow-up on Stomach Pain', 'Blood Pressure Check')"
         },
         "category": {
           "type": "string",
@@ -130,37 +198,54 @@
         "source": {
           "type": "string",
           "enum": ["survey", "document", "demographic", "general"],
-          "description": "Data source that triggered this recommendation"
+          "description": "REQUIRED: Data source that triggered this recommendation"
         },
         "rationale": {
           "type": "string",
-          "description": "Must start with source-specific prefix. Survey: 'Based on your recent check-in...', Document: 'Based on your lab results...', Demographic: 'Based on your age...', General: 'As part of preventive health...'"
+          "description": "Brief explanation. MUST start with: Survey='Based on your recent check-in...', Document='Based on your lab results...', Demographic='Based on your age...', General='As part of preventive health...'"
         },
         "suggestedTiming": {
           "type": "string",
-          "enum": ["This month", "Within 3 months", "This year"],
-          "description": "Recommended timeframe"
+          "enum": ["Immediate emergency", "Same day", "Next several days", "This week", "Within 2 weeks", "This month", "Within 3 months", "This year"],
+          "description": "When to take action"
         },
         "priority": {
           "type": "integer",
-          "enum": [1, 2, 3],
-          "description": "1=urgent, 2=moderate, 3=low"
+          "minimum": 1,
+          "maximum": 4,
+          "description": "1=immediate/urgent, 2=days, 3=weeks, 4=months"
+        },
+        "urgencyLevel": {
+          "type": "string",
+          "enum": ["emergent", "urgent", "semi_urgent", "non_urgent"],
+          "description": "emergent=911, urgent=today, semi_urgent=days, non_urgent=weeks"
+        },
+        "languageStrength": {
+          "type": "string",
+          "enum": ["imperative", "strong_advisory", "advisory"],
+          "description": "imperative='Call 911/See doctor today', strong_advisory='Should schedule', advisory='Consider scheduling'"
         },
         "clinicianPrompt": {
           "type": "string",
           "description": "Optional: What to ask your doctor"
         },
+        "redFlagsToWatch": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Warning signs to watch for (include for all non-emergent recommendations)"
+        },
         "possibleConditions": {
           "type": "array",
           "items": { "$ref": "#/definitions/PossibleCondition" },
-          "description": "Optional: Possible conditions that may explain symptoms (for informational purposes only)"
+          "description": "Possible medical conditions based on survey symptoms - for informational purposes only, NOT a diagnosis"
         }
       },
-      "required": ["title", "category", "source", "rationale", "suggestedTiming", "priority"]
+      "required": ["title", "source", "category", "rationale", "suggestedTiming", "priority"]
     },
     
     "PossibleCondition": {
       "type": "object",
+      "description": "Possible medical condition inferred from symptoms - NOT a diagnosis",
       "properties": {
         "condition": {
           "type": "string",
@@ -168,17 +253,21 @@
         },
         "hebrewName": {
           "type": "string",
-          "description": "Name in Hebrew (e.g., אבנים בכיס מרה)"
+          "description": "Name in Hebrew (e.g., אבנים בכיס מרה, כיב קיבה, מיגרנה)"
         },
         "confidence": {
           "type": "string",
           "enum": ["high", "moderate", "low"],
-          "description": "How well symptoms match the pattern"
+          "description": "How well user symptoms match this condition pattern"
         },
         "matchingSymptoms": {
           "type": "array",
           "items": { "type": "string" },
           "description": "List of user symptoms that match this condition"
+        },
+        "typicalPresentation": {
+          "type": "string",
+          "description": "How this condition typically presents"
         },
         "urgency": {
           "type": "string",
@@ -205,255 +294,505 @@
     
     "RecommendationResponse": {
       "type": "object",
+      "description": "Response format with array of 0-4 recommendations including possible conditions",
       "properties": {
         "recommendations": {
           "type": "array",
           "items": { "$ref": "#/definitions/Recommendation" },
           "minItems": 0,
           "maxItems": 4,
-          "description": "0-4 recommendations, prioritizing survey > document > demographic > general"
+          "description": "Array of 0-4 recommendations prioritizing: survey > document > demographic > general"
         }
       },
       "required": ["recommendations"]
-    },
+    }
+  },
+  
+  "symptomPatternMatching": {
+    "description": "Pattern matching logic to infer possible medical conditions from survey symptoms",
     
-    "PriorityOrder": {
-      "type": "object",
-      "description": "Defines the order in which recommendations should be generated",
-      "properties": {
-        "first": {
-          "type": "string",
-          "const": "survey",
-          "description": "Survey-based recommendations (required if data exists)"
-        },
-        "second": {
-          "type": "string",
-          "const": "document",
-          "description": "Document-based recommendations"
-        },
-        "third": {
-          "type": "string",
-          "const": "demographic",
-          "description": "Age and gender-based recommendations"
-        },
-        "fourth": {
-          "type": "string",
-          "const": "general",
-          "description": "General health recommendations"
-        }
-      }
-    },
-    
-    "ScreeningGuideline": {
-      "type": "object",
-      "properties": {
-        "name": { 
-          "type": "string",
-          "enum": [
-            "colonoscopy",
-            "bone_density",
-            "mammography",
-            "pap_smear",
-            "prostate_screening",
-            "blood_pressure",
-            "cholesterol",
-            "flu_vaccine"
-          ]
-        },
-        "targetDemographic": {
-          "type": "object",
-          "properties": {
-            "minAge": { "type": "integer" },
-            "maxAge": { "type": "integer" },
-            "gender": { "type": "string", "enum": ["male", "female", "any"] }
+    "gastrointestinal": [
+      {
+        "condition": "Gastritis / Peptic Ulcer",
+        "hebrewName": "דלקת קיבה / כיב קיבה",
+        "symptomPattern": {
+          "primarySymptoms": ["stomach pain", "abdominal pain", "upper abdominal pain"],
+          "secondarySymptoms": ["nausea", "vomiting", "bloating", "burning sensation", "indigestion"],
+          "painCharacteristics": {
+            "location": "upper abdomen, epigastric region",
+            "timing": "often worse on empty stomach or after meals",
+            "quality": "burning, gnawing"
           }
         },
-        "frequency": { "type": "string" },
-        "category": { 
-          "type": "string",
-          "enum": ["checkup", "vaccine"]
+        "confidence": {
+          "high": "stomach pain + nausea + burning sensation",
+          "moderate": "stomach pain + one other GI symptom",
+          "low": "stomach pain alone"
         },
-        "priority": { "type": "integer", "enum": [1, 2, 3] }
+        "urgency": "moderate",
+        "recommendation": "See primary care doctor or gastroenterologist within 1-2 weeks",
+        "suggestedTests": ["Upper endoscopy (gastroscopy)", "H. pylori testing", "Stool test"],
+        "redFlags": ["Bloody vomit", "Black tarry stools", "Severe unrelenting pain", "Weight loss"]
+      },
+      {
+        "condition": "Gallstones / Cholecystitis",
+        "hebrewName": "אבנים בכיס מרה / דלקת כיס מרה",
+        "symptomPattern": {
+          "primarySymptoms": ["upper right abdominal pain", "right upper quadrant pain"],
+          "secondarySymptoms": ["nausea", "vomiting", "pain after fatty meals", "pain radiating to shoulder"],
+          "painCharacteristics": {
+            "location": "upper right abdomen, below ribs",
+            "timing": "often after eating, especially fatty foods",
+            "quality": "sharp, cramping, colicky"
+          }
+        },
+        "confidence": {
+          "high": "right upper abdominal pain + nausea + pain after fatty meals",
+          "moderate": "right upper abdominal pain + one other symptom",
+          "low": "upper abdominal pain without specific location"
+        },
+        "urgency": "moderate to urgent",
+        "recommendation": "See doctor within several days; urgent if fever or severe pain",
+        "suggestedTests": ["Abdominal ultrasound", "Blood tests (liver function, CBC)", "HIDA scan"],
+        "redFlags": ["Fever with chills", "Severe unrelenting pain", "Jaundice (yellowing of skin/eyes)"]
+      },
+      {
+        "condition": "Gastroenteritis / Food Poisoning",
+        "hebrewName": "דלקת קיבה ומעיים / הרעלת מזון",
+        "symptomPattern": {
+          "primarySymptoms": ["stomach pain", "abdominal pain", "diarrhea"],
+          "secondarySymptoms": ["nausea", "vomiting", "fever", "cramping"],
+          "timing": "acute onset, often after eating"
+        },
+        "confidence": {
+          "high": "stomach pain + diarrhea + vomiting + recent onset",
+          "moderate": "stomach pain + diarrhea or vomiting",
+          "low": "stomach pain with mild GI symptoms"
+        },
+        "urgency": "moderate",
+        "recommendation": "Usually self-limiting; see doctor if symptoms persist >3 days or severe dehydration",
+        "suggestedTests": ["Stool culture (if severe or persistent)", "Blood tests (if dehydrated)"],
+        "redFlags": ["Bloody diarrhea", "High fever >102°F", "Signs of dehydration", "Severe abdominal pain"]
+      },
+      {
+        "condition": "Irritable Bowel Syndrome (IBS)",
+        "hebrewName": "תסמונת המעי הרגיז",
+        "symptomPattern": {
+          "primarySymptoms": ["abdominal pain", "cramping"],
+          "secondarySymptoms": ["bloating", "gas", "diarrhea", "constipation", "alternating bowel habits"],
+          "timing": "chronic, recurrent, often related to stress or food"
+        },
+        "confidence": {
+          "high": "chronic abdominal pain + bloating + altered bowel habits",
+          "moderate": "recurrent abdominal pain with GI symptoms",
+          "low": "mild intermittent abdominal discomfort"
+        },
+        "urgency": "routine",
+        "recommendation": "Schedule appointment with gastroenterologist for evaluation",
+        "suggestedTests": ["Colonoscopy (to rule out other conditions)", "Blood tests", "Stool tests"],
+        "redFlags": ["Weight loss", "Blood in stool", "Nocturnal symptoms", "New onset after age 50"]
+      },
+      {
+        "condition": "Acid Reflux / GERD",
+        "hebrewName": "ריפלוקס / שיבוש חומצי",
+        "symptomPattern": {
+          "primarySymptoms": ["heartburn", "burning sensation in chest", "acid reflux"],
+          "secondarySymptoms": ["difficulty swallowing", "regurgitation", "sour taste", "chronic cough"],
+          "timing": "often worse after eating or lying down"
+        },
+        "confidence": {
+          "high": "heartburn + regurgitation + worse when lying down",
+          "moderate": "frequent heartburn or burning sensation",
+          "low": "occasional heartburn"
+        },
+        "urgency": "routine",
+        "recommendation": "See primary care doctor; gastroenterologist if symptoms persist despite treatment",
+        "suggestedTests": ["Upper endoscopy", "pH monitoring", "Esophageal manometry"],
+        "redFlags": ["Difficulty swallowing", "Weight loss", "Vomiting blood", "Chest pain (rule out cardiac)"]
       }
+    ],
+    
+    "headache": [
+      {
+        "condition": "Migraine",
+        "hebrewName": "מיגרנה",
+        "symptomPattern": {
+          "primarySymptoms": ["headache", "severe headache"],
+          "secondarySymptoms": ["nausea", "vomiting", "sensitivity to light", "sensitivity to sound", "visual disturbances", "aura"],
+          "painCharacteristics": {
+            "location": "often one-sided (unilateral)",
+            "quality": "throbbing, pulsating",
+            "duration": "4-72 hours"
+          }
+        },
+        "confidence": {
+          "high": "severe headache + nausea + light sensitivity + one-sided",
+          "moderate": "severe headache + nausea or light sensitivity",
+          "low": "severe headache alone"
+        },
+        "urgency": "routine to moderate",
+        "recommendation": "See neurologist or primary care for migraine management",
+        "suggestedTests": ["Clinical diagnosis (usually no tests needed)", "MRI/CT if atypical features"],
+        "redFlags": ["Sudden severe headache (worst of life)", "Headache with fever and stiff neck", "New headache after age 50", "Neurological symptoms"]
+      },
+      {
+        "condition": "Tension Headache",
+        "hebrewName": "כאב ראש מתחי",
+        "symptomPattern": {
+          "primarySymptoms": ["headache", "head pain"],
+          "secondarySymptoms": ["neck pain", "shoulder tension", "pressure sensation"],
+          "painCharacteristics": {
+            "location": "bilateral, band-like around head",
+            "quality": "pressure, tightness, dull ache",
+            "triggers": "stress, poor posture, fatigue"
+          }
+        },
+        "confidence": {
+          "high": "bilateral headache + pressure sensation + neck tension + stress trigger",
+          "moderate": "headache with pressure quality",
+          "low": "mild headache"
+        },
+        "urgency": "routine",
+        "recommendation": "Usually managed with OTC pain relievers and stress management; see doctor if frequent",
+        "suggestedTests": ["Usually none needed", "Consider evaluation if persistent"],
+        "redFlags": ["Sudden severe onset", "Progressive worsening", "Neurological symptoms"]
+      },
+      {
+        "condition": "Cluster Headache",
+        "hebrewName": "כאב ראש אשכולי",
+        "symptomPattern": {
+          "primarySymptoms": ["severe headache", "excruciating headache"],
+          "secondarySymptoms": ["eye pain", "tearing", "nasal congestion", "restlessness"],
+          "painCharacteristics": {
+            "location": "unilateral, around eye",
+            "quality": "severe, stabbing, burning",
+            "timing": "clusters of attacks, often at same time each day",
+            "duration": "15 minutes to 3 hours"
+          }
+        },
+        "confidence": {
+          "high": "severe unilateral headache + eye tearing + nasal symptoms + clustered pattern",
+          "moderate": "severe headache around eye with autonomic symptoms",
+          "low": "severe headache without specific pattern"
+        },
+        "urgency": "urgent to moderate",
+        "recommendation": "See neurologist urgently for acute management and prevention",
+        "suggestedTests": ["Clinical diagnosis", "MRI to rule out secondary causes"],
+        "redFlags": ["First episode requires evaluation", "Any neurological symptoms"]
+      },
+      {
+        "condition": "Sinus Headache / Sinusitis",
+        "hebrewName": "כאב ראש סינוסי / דלקת סינוסים",
+        "symptomPattern": {
+          "primarySymptoms": ["headache", "facial pain", "sinus pressure"],
+          "secondarySymptoms": ["nasal congestion", "post-nasal drip", "facial tenderness", "fever"],
+          "painCharacteristics": {
+            "location": "forehead, cheeks, around eyes",
+            "quality": "pressure, fullness",
+            "timing": "worse when bending forward"
+          }
+        },
+        "confidence": {
+          "high": "facial pain/pressure + nasal congestion + facial tenderness",
+          "moderate": "headache + nasal symptoms",
+          "low": "headache with mild nasal symptoms"
+        },
+        "urgency": "moderate",
+        "recommendation": "See primary care doctor within a week if symptoms persist",
+        "suggestedTests": ["Clinical examination", "CT scan if chronic or complicated"],
+        "redFlags": ["High fever", "Severe headache", "Vision changes", "Confusion"]
+      }
+    ],
+    
+    "respiratory": [
+      {
+        "condition": "Upper Respiratory Infection / Common Cold",
+        "hebrewName": "זיהום דרכי נשימה עליונות / הצטננות",
+        "symptomPattern": {
+          "primarySymptoms": ["cough", "sore throat", "nasal congestion"],
+          "secondarySymptoms": ["runny nose", "sneezing", "fatigue", "mild fever", "body aches"],
+          "timing": "acute onset, usually resolves in 7-10 days"
+        },
+        "confidence": {
+          "high": "cough + sore throat + nasal congestion + recent onset",
+          "moderate": "two or more respiratory symptoms",
+          "low": "single respiratory symptom"
+        },
+        "urgency": "routine",
+        "recommendation": "Usually self-limiting; see doctor if symptoms worsen or persist >10 days",
+        "suggestedTests": ["Usually none needed", "Consider strep test if severe sore throat"],
+        "redFlags": ["Difficulty breathing", "High fever >103°F", "Symptoms >10 days", "Severe fatigue"]
+      },
+      {
+        "condition": "Bronchitis",
+        "hebrewName": "דלקת סימפונות",
+        "symptomPattern": {
+          "primarySymptoms": ["persistent cough", "productive cough"],
+          "secondarySymptoms": ["chest discomfort", "mucus production", "wheezing", "fatigue", "low fever"],
+          "timing": "cough persisting >5 days, often after URI"
+        },
+        "confidence": {
+          "high": "persistent productive cough + chest discomfort + recent URI",
+          "moderate": "persistent cough with respiratory symptoms",
+          "low": "mild cough"
+        },
+        "urgency": "moderate",
+        "recommendation": "See doctor within a few days if persistent or worsening",
+        "suggestedTests": ["Chest X-ray (if pneumonia suspected)", "Spirometry (if chronic)"],
+        "redFlags": ["Shortness of breath", "Chest pain", "High fever", "Blood in mucus"]
+      },
+      {
+        "condition": "Asthma Exacerbation",
+        "hebrewName": "התקף אסטמה",
+        "symptomPattern": {
+          "primarySymptoms": ["wheezing", "shortness of breath", "difficulty breathing"],
+          "secondarySymptoms": ["chest tightness", "cough", "rapid breathing"],
+          "triggers": "exercise, allergens, cold air, infections"
+        },
+        "confidence": {
+          "high": "wheezing + shortness of breath + known asthma history",
+          "moderate": "respiratory symptoms with triggers",
+          "low": "mild respiratory symptoms"
+        },
+        "urgency": "urgent",
+        "recommendation": "Use rescue inhaler; see doctor same day if not improving or symptoms severe",
+        "suggestedTests": ["Peak flow measurement", "Chest X-ray if severe", "Pulmonary function tests"],
+        "redFlags": ["Severe difficulty breathing", "Blue lips", "Inability to speak", "No improvement with inhaler"]
+      }
+    ],
+    
+    "musculoskeletal": [
+      {
+        "condition": "Lower Back Strain / Mechanical Back Pain",
+        "hebrewName": "מתיחת שרירי גב תחתון",
+        "symptomPattern": {
+          "primarySymptoms": ["lower back pain", "back pain"],
+          "secondarySymptoms": ["muscle stiffness", "limited range of motion", "pain with movement"],
+          "painCharacteristics": {
+            "location": "lower back, lumbar region",
+            "quality": "aching, stiff",
+            "timing": "worse with activity, better with rest"
+          }
+        },
+        "confidence": {
+          "high": "lower back pain + muscle stiffness + mechanical pattern (worse with activity)",
+          "moderate": "back pain with movement-related pattern",
+          "low": "mild back discomfort"
+        },
+        "urgency": "routine",
+        "recommendation": "Usually improves with rest, gentle exercise, OTC pain relievers; see doctor if persistent >2 weeks",
+        "suggestedTests": ["X-ray or MRI if persistent or neurological symptoms"],
+        "redFlags": ["Numbness or weakness in legs", "Bowel/bladder dysfunction", "Saddle anesthesia", "Fever"]
+      },
+      {
+        "condition": "Sciatica / Lumbar Radiculopathy",
+        "hebrewName": "סיאטיקה / דלקת עצב סיאטי",
+        "symptomPattern": {
+          "primarySymptoms": ["lower back pain", "leg pain", "radiating pain"],
+          "secondarySymptoms": ["numbness", "tingling", "weakness in leg", "pain shooting down leg"],
+          "painCharacteristics": {
+            "location": "lower back radiating to buttock and leg",
+            "quality": "sharp, shooting, electric",
+            "distribution": "follows nerve path down leg"
+          }
+        },
+        "confidence": {
+          "high": "back pain + radiating leg pain + numbness/tingling following nerve distribution",
+          "moderate": "back pain with leg symptoms",
+          "low": "back pain without radicular symptoms"
+        },
+        "urgency": "moderate to urgent",
+        "recommendation": "See doctor within a week; urgent if progressive weakness or bowel/bladder symptoms",
+        "suggestedTests": ["MRI of lumbar spine", "Nerve conduction studies", "X-ray"],
+        "redFlags": ["Progressive weakness", "Bowel/bladder dysfunction", "Saddle anesthesia", "Bilateral leg symptoms"]
+      }
+    ],
+    
+    "other": [
+      {
+        "condition": "Anxiety",
+        "hebrewName": "חרדה",
+        "symptomPattern": {
+          "primarySymptoms": ["low mood", "worry", "nervousness"],
+          "secondarySymptoms": ["difficulty concentrating", "restlessness", "fatigue", "muscle tension", "sleep problems"],
+          "physicalSymptoms": ["rapid heartbeat", "sweating", "trembling"]
+        },
+        "confidence": {
+          "high": "low mood + worry + multiple physical symptoms + no clear medical cause",
+          "moderate": "psychological symptoms affecting function",
+          "low": "mild situational stress"
+        },
+        "urgency": "moderate",
+        "recommendation": "Consider counseling or therapy; see primary care doctor for evaluation",
+        "suggestedTests": ["Clinical assessment", "Rule out medical causes (thyroid, etc.)"],
+        "redFlags": ["Suicidal thoughts", "Severe impairment of function", "Panic attacks"]
+      },
+      {
+        "condition": "Depression",
+        "hebrewName": "דיכאון",
+        "symptomPattern": {
+          "primarySymptoms": ["low mood", "sadness", "loss of interest"],
+          "secondarySymptoms": ["fatigue", "sleep problems", "appetite changes", "difficulty concentrating", "feelings of worthlessness"],
+          "duration": "symptoms present most of the day, nearly every day, for at least 2 weeks"
+        },
+        "confidence": {
+          "high": "persistent low mood + loss of interest + multiple associated symptoms >2 weeks",
+          "moderate": "low mood with some associated symptoms",
+          "low": "temporary sadness or low mood"
+        },
+        "urgency": "moderate",
+        "recommendation": "See mental health professional or primary care doctor for evaluation",
+        "suggestedTests": ["Clinical assessment", "Rule out medical causes (thyroid, vitamin deficiencies)"],
+        "redFlags": ["Suicidal thoughts", "Thoughts of self-harm", "Inability to care for self"]
+      }
+    ]
+  },
+  
+  "conditionInferenceLogic": {
+    "description": "Logic for matching survey symptoms to possible conditions",
+    
+    "step1_identifyPrimarySymptoms": {
+      "description": "Extract key symptoms from survey",
+      "logic": "Look at symptom names, pain location, and associated symptoms"
     },
     
-    "InferenceRule": {
-      "type": "object",
-      "properties": {
-        "ruleId": { "type": "string" },
-        "name": { "type": "string" },
-        "condition": { "type": "string" },
-        "action": { "type": "string" },
-        "priority": { "type": "integer" },
-        "timing": { "type": "string" },
-        "category": { "type": "string" }
-      }
+    "step2_matchPatterns": {
+      "description": "Compare symptoms against condition patterns",
+      "algorithm": [
+        "1. Check if primary symptoms match any condition's primary symptoms",
+        "2. Count how many secondary symptoms match",
+        "3. Consider pain characteristics (location, quality, timing)",
+        "4. Check for red flag symptoms",
+        "5. Calculate confidence score"
+      ]
     },
     
-    "Constraint": {
-      "type": "object",
-      "properties": {
-        "noDiagnosis": {
-          "type": "boolean",
-          "const": true,
-          "description": "System does not diagnose conditions"
-        },
-        "conservativeInterpretation": {
-          "type": "boolean",
-          "const": true,
-          "description": "Do not interpret borderline values as diagnoses"
-        },
-        "immediateConsultationForCritical": {
-          "type": "boolean",
-          "const": true,
-          "description": "Recommend immediate clinician consultation for critical findings"
-        },
-        "englishOnly": {
-          "type": "boolean",
-          "const": true,
-          "description": "All text must be in English"
-        },
-        "maxRecommendations": {
-          "type": "integer",
-          "const": 4,
-          "description": "Maximum 4 recommendations per request"
-        },
-        "noRepeatRecommendations": {
-          "type": "boolean",
-          "const": true,
-          "description": "Do not suggest existing recommendations"
-        }
+    "step3_calculateConfidence": {
+      "description": "Determine confidence level for each match",
+      "high": "Primary symptom matches + 2+ secondary symptoms match + pain characteristics align",
+      "moderate": "Primary symptom matches + 1 secondary symptom OR multiple secondary symptoms without primary",
+      "low": "Partial match with few symptoms or vague presentation"
+    },
+    
+    "step4_determineUrgency": {
+      "description": "Set urgency based on red flags and severity",
+      "rules": [
+        "IF red flag symptom present → emergency or urgent",
+        "IF severe symptoms + concerning pattern → urgent",
+        "IF moderate symptoms without red flags → moderate",
+        "IF mild chronic symptoms → routine"
+      ]
+    },
+    
+    "step5_generateRecommendation": {
+      "description": "Create recommendation with possible conditions",
+      "format": {
+        "title": "Based on primary symptom",
+        "possibleConditions": [
+          "Array of 1-3 most likely conditions",
+          "Ordered by confidence (high to low)",
+          "Each with Hebrew name, matching symptoms, urgency, and disclaimer"
+        ]
       }
     }
   },
   
-  "screeningGuidelines": [
-    {
-      "name": "colonoscopy",
-      "targetDemographic": { "minAge": 50, "gender": "any" },
-      "frequency": "Every 10 years",
-      "category": "checkup",
-      "priority": 3
+  "exampleWithConditions": {
+    "description": "Example output with possible conditions included",
+    "input": {
+      "survey": {
+        "painLevel": 7,
+        "painLocation": "upper abdomen",
+        "symptoms": [
+          {
+            "name": "stomach pain",
+            "severity": "moderate",
+            "durationDays": 5
+          },
+          {
+            "name": "nausea",
+            "severity": "moderate"
+          },
+          {
+            "name": "bloating",
+            "severity": "mild"
+          }
+        ]
+      }
     },
-    {
-      "name": "bone_density",
-      "targetDemographic": { "minAge": 65, "gender": "female" },
-      "frequency": "As recommended by physician",
-      "category": "checkup",
-      "priority": 3
-    },
-    {
-      "name": "mammography",
-      "targetDemographic": { "minAge": 40, "gender": "female" },
-      "frequency": "Annually",
-      "category": "checkup",
-      "priority": 3
-    },
-    {
-      "name": "pap_smear",
-      "targetDemographic": { "minAge": 21, "maxAge": 65, "gender": "female" },
-      "frequency": "Every 3 years",
-      "category": "checkup",
-      "priority": 3
-    },
-    {
-      "name": "prostate_screening",
-      "targetDemographic": { "minAge": 50, "gender": "male" },
-      "frequency": "Discuss with doctor",
-      "category": "checkup",
-      "priority": 3
-    },
-    {
-      "name": "blood_pressure",
-      "targetDemographic": { "minAge": 18, "gender": "any" },
-      "frequency": "Annually",
-      "category": "checkup",
-      "priority": 3
-    },
-    {
-      "name": "cholesterol",
-      "targetDemographic": { "minAge": 20, "gender": "any" },
-      "frequency": "Every 5 years",
-      "category": "checkup",
-      "priority": 3
-    },
-    {
-      "name": "flu_vaccine",
-      "targetDemographic": { "minAge": 18, "gender": "any" },
-      "frequency": "Annually",
-      "category": "vaccine",
-      "priority": 3
+    "output": {
+      "recommendations": [
+        {
+          "title": "Follow-up on Stomach Pain",
+          "source": "survey",
+          "category": "followup",
+          "rationale": "Following the symptoms you reported, particularly stomach pain persisting for 5 days with nausea and bloating, medical evaluation is recommended.",
+          "suggestedTiming": "Within 2 weeks",
+          "priority": 2,
+          "urgencyLevel": "semi_urgent",
+          "languageStrength": "strong_advisory",
+          "possibleConditions": [
+            {
+              "condition": "Gastritis / Peptic Ulcer",
+              "hebrewName": "דלקת קיבה / כיב קיבה",
+              "confidence": "high",
+              "matchingSymptoms": ["stomach pain", "nausea", "bloating"],
+              "typicalPresentation": "Upper abdominal pain, often with burning sensation, nausea, and bloating. May be worse on empty stomach.",
+              "urgency": "moderate",
+              "recommendation": "See primary care doctor or gastroenterologist within 1-2 weeks",
+              "suggestedTests": ["Upper endoscopy (gastroscopy)", "H. pylori testing", "Stool test"],
+              "disclaimer": "This is not a diagnosis. Only a healthcare professional can diagnose this condition after proper examination and tests."
+            },
+            {
+              "condition": "Gastroenteritis / Food Poisoning",
+              "hebrewName": "דלקת קיבה ומעיים / הרעלת מזון",
+              "confidence": "moderate",
+              "matchingSymptoms": ["stomach pain", "nausea"],
+              "typicalPresentation": "Acute stomach pain with nausea, vomiting, and sometimes diarrhea. Usually follows food consumption.",
+              "urgency": "moderate",
+              "recommendation": "Usually self-limiting; see doctor if symptoms persist >3 days",
+              "suggestedTests": ["Stool culture (if severe)", "Blood tests (if dehydrated)"],
+              "disclaimer": "This is not a diagnosis. Only a healthcare professional can diagnose this condition after proper examination and tests."
+            }
+          ],
+          "redFlagsToWatch": [
+            "Bloody vomit or black tarry stools",
+            "Severe unrelenting pain",
+            "Fever above 101°F",
+            "Weight loss",
+            "Difficulty swallowing"
+          ]
+        }
+      ]
     }
-  ],
+  },
   
-  "inferenceRules": [
-    {
-      "ruleId": "R1",
-      "name": "High Pain Rule",
-      "condition": "painLevel >= 5",
-      "action": "Recommend seeing a doctor",
-      "priority": 1,
-      "timing": "This month",
-      "category": "followup"
+  "implementationGuidelines": {
+    "whenToIncludeConditions": {
+      "include": [
+        "Survey-based recommendations with specific symptom patterns",
+        "When 1+ symptoms can be matched to known patterns",
+        "When confidence level is moderate or high"
+      ],
+      "exclude": [
+        "Document-based recommendations (unless symptoms mentioned)",
+        "Demographic recommendations (routine screenings)",
+        "General health recommendations",
+        "When symptoms are too vague to match patterns"
+      ]
     },
-    {
-      "ruleId": "R2",
-      "name": "Low Mood Rule",
-      "condition": "mood == 'low'",
-      "action": "Recommend support or counseling",
-      "priority": 1,
-      "timing": "Within 3 months",
-      "category": "followup"
+    
+    "maxConditionsPerRecommendation": {
+      "rule": "Include 1-3 possible conditions per recommendation",
+      "ordering": "Order by confidence level (high → moderate → low)",
+      "limit": "Don't overwhelm user with too many possibilities"
     },
-    {
-      "ruleId": "R3",
-      "name": "Persistent Symptom Rule",
-      "condition": "symptomDurationDays > 7",
-      "action": "Recommend medical evaluation",
-      "priority": 2,
-      "timing": "Within 3 months",
-      "category": "followup"
-    },
-    {
-      "ruleId": "R4",
-      "name": "Abnormal Lab Rule",
-      "condition": "labResult.isAbnormal == true",
-      "action": "Recommend follow-up",
-      "priority": 2,
-      "timing": "Within 3 months",
-      "category": "followup"
-    },
-    {
-      "ruleId": "R5",
-      "name": "Critical Finding Rule",
-      "condition": "document.hasCriticalFinding == true",
-      "action": "Recommend IMMEDIATE consultation",
-      "priority": 1,
-      "timing": "This month",
-      "category": "followup"
+    
+    "disclaimerRequirement": {
+      "rule": "EVERY possible condition MUST include the disclaimer",
+      "text": "This is not a diagnosis. Only a healthcare professional can diagnose this condition after proper examination and tests.",
+      "importance": "Critical for legal and ethical reasons"
     }
-  ],
-  
-  "rationaleTemplates": {
-    "survey": [
-      "Based on your recent check-in...",
-      "According to your pain rating of {painLevel}...",
-      "Following the symptoms you reported...",
-      "Your latest survey indicates..."
-    ],
-    "document": [
-      "Based on your lab results...",
-      "According to your medical documents...",
-      "Your test results show..."
-    ],
-    "demographic": [
-      "Based on your age...",
-      "As a recommended routine screening..."
-    ],
-    "general": [
-      "As part of preventive health...",
-      "As a general recommendation..."
-    ]
   },
   
   "constraints": {
@@ -462,6 +801,11 @@
     "immediateConsultationForCritical": true,
     "englishOnly": true,
     "maxRecommendations": 4,
-    "noRepeatRecommendations": true
+    "noRepeatRecommendations": true,
+    "painScoreAloneNeverDeterminesUrgency": true,
+    "urgentIssuesNeverDelayed": true,
+    "consistencyRequired": true,
+    "alwaysReturnAtLeastOne": true,
+    "alwaysIncludeDisclaimer": true
   }
 }
