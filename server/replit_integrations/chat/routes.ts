@@ -1,14 +1,25 @@
 import type { Express, Request, Response } from "express";
-import OpenAI from "openai";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import { chatStorage } from "./storage";
 
-const openai = new OpenAI({
-  apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
-  baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
-});
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
+const geminiModel = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+
+const AI_DOCTOR_SYSTEM_PROMPT = `You are a warm, empathetic AI medical assistant called "Dr. MedAssist". You help users understand their health concerns by listening carefully and providing thoughtful, evidence-based guidance.
+
+IMPORTANT RULES:
+- You are NOT a real doctor. Always remind users that your advice is informational only and they should consult a real healthcare professional for diagnosis and treatment.
+- Keep responses SHORT (2-4 sentences) because they may be spoken aloud via text-to-speech. Use natural, conversational language.
+- Ask 1-2 clarifying questions when the user's symptoms are vague.
+- Be empathetic and reassuring, but honest.
+- NEVER diagnose conditions definitively. Use phrases like "this could suggest", "it might be worth checking", "many people experience this when".
+- SAFETY TRIAGE: If the user describes symptoms that could indicate an emergency (chest pain, difficulty breathing, sudden severe headache, signs of stroke, heavy bleeding, suicidal thoughts), respond IMMEDIATELY with: "This could be urgent. Please seek emergency help now by calling emergency services or going to the nearest emergency room." Then provide brief guidance while waiting for help.
+- Use simple language that anyone can understand.
+- When appropriate, suggest what type of specialist they might want to see.
+- Remember previous messages in the conversation for context.`;
+
 
 export function registerChatRoutes(app: Express): void {
-  // Get all conversations
   app.get("/api/conversations", async (req: Request, res: Response) => {
     try {
       const conversations = await chatStorage.getAllConversations();
@@ -19,7 +30,6 @@ export function registerChatRoutes(app: Express): void {
     }
   });
 
-  // Get single conversation with messages
   app.get("/api/conversations/:id", async (req: Request, res: Response) => {
     try {
       const id = parseInt(req.params.id);
@@ -35,7 +45,6 @@ export function registerChatRoutes(app: Express): void {
     }
   });
 
-  // Create new conversation
   app.post("/api/conversations", async (req: Request, res: Response) => {
     try {
       const { title } = req.body;
@@ -47,7 +56,6 @@ export function registerChatRoutes(app: Express): void {
     }
   });
 
-  // Delete conversation
   app.delete("/api/conversations/:id", async (req: Request, res: Response) => {
     try {
       const id = parseInt(req.params.id);
@@ -59,53 +67,53 @@ export function registerChatRoutes(app: Express): void {
     }
   });
 
-  // Send message and get AI response (streaming)
   app.post("/api/conversations/:id/messages", async (req: Request, res: Response) => {
     try {
       const conversationId = parseInt(req.params.id);
       const { content } = req.body;
 
-      // Save user message
       await chatStorage.createMessage(conversationId, "user", content);
 
-      // Get conversation history for context
+      const language = req.body.language || "en";
+
       const messages = await chatStorage.getMessagesByConversation(conversationId);
-      const chatMessages = messages.map((m) => ({
-        role: m.role as "user" | "assistant",
-        content: m.content,
+
+      const systemInstruction = AI_DOCTOR_SYSTEM_PROMPT + (language === "he"
+        ? "\n\nIMPORTANT: Respond in Hebrew. Use simple Hebrew that is easy to understand."
+        : "");
+
+      const chatHistory = messages.slice(0, -1).map((m) => ({
+        role: m.role === "user" ? "user" as const : "model" as const,
+        parts: [{ text: m.content }],
       }));
 
-      // Set up SSE
+      const chat = geminiModel.startChat({
+        history: chatHistory,
+        systemInstruction: { parts: [{ text: systemInstruction }] },
+      });
+
       res.setHeader("Content-Type", "text/event-stream");
       res.setHeader("Cache-Control", "no-cache");
       res.setHeader("Connection", "keep-alive");
 
-      // Stream response from OpenAI
-      const stream = await openai.chat.completions.create({
-        model: "gpt-5.1",
-        messages: chatMessages,
-        stream: true,
-        max_completion_tokens: 2048,
-      });
+      const result = await chat.sendMessageStream(content);
 
       let fullResponse = "";
 
-      for await (const chunk of stream) {
-        const content = chunk.choices[0]?.delta?.content || "";
-        if (content) {
-          fullResponse += content;
-          res.write(`data: ${JSON.stringify({ content })}\n\n`);
+      for await (const chunk of result.stream) {
+        const text = chunk.text();
+        if (text) {
+          fullResponse += text;
+          res.write(`data: ${JSON.stringify({ content: text })}\n\n`);
         }
       }
 
-      // Save assistant message
       await chatStorage.createMessage(conversationId, "assistant", fullResponse);
 
       res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
       res.end();
     } catch (error) {
       console.error("Error sending message:", error);
-      // Check if headers already sent (SSE streaming started)
       if (res.headersSent) {
         res.write(`data: ${JSON.stringify({ error: "Failed to send message" })}\n\n`);
         res.end();
@@ -115,4 +123,3 @@ export function registerChatRoutes(app: Express): void {
     }
   });
 }
-
