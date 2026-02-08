@@ -67,13 +67,42 @@ Preferred communication style: Simple, everyday language.
 - **UI**: WatchConnectionScreen accessible from Profile, shows connection status and heart rate stats
 - **Note**: Full HealthKit/Health Connect integration requires device builds (not available in Expo Go)
 
+### In-App Purchase Paywall
+- **Config File**: `client/config/payments.ts` contains pricing tiers and product IDs
+- **Test Mode**: Currently using 1 cent test pricing for development
+- **Pricing Tiers**: Monthly ($0.01/mo test), Yearly ($0.01/yr test), Lifetime ($0.01 test)
+- **Product IDs**: `medassist_premium_monthly`, `medassist_premium_yearly`, `medassist_premium_lifetime`
+- **UI Component**: `PaywallScreen` shows premium features with purchase options
+- **Integration**: Paywall appears when non-premium users tap "Generate with AI" on Suggestions screen
+- **Note**: Actual App Store/Google Play IAP requires device builds and developer accounts
+
 ### Navigation Structure
 1. **Onboarding Stack** (unauthenticated users):
    - Language Selection → Login (with link to Register) → OTP Verification → Initial Survey (new users only)
 
 2. **Main Tab Navigator** (authenticated users):
-   - Home, Surveys, Suggestions, Profile tabs
+   - Home, Surveys, Suggestions, AI Doctor, Profile tabs
    - Floating Action Button for monthly survey (modal presentation)
+
+### AI Doctor (Voice-Enabled Chat)
+- **Screen**: `AIDoctorScreen` - Real-time AI medical assistant chat
+- **Backend**: Uses OpenAI integration via `server/replit_integrations/chat/` with streaming SSE
+- **Database Tables**: `conversations`, `messages` (in `shared/models/chat.ts`)
+- **System Prompt**: Empathetic "Dr. MedAssist" persona with safety triage for emergencies
+- **Voice Mode** (toggle on/off):
+  - **Speech-to-Text**: Web Speech API (web only), disabled with fallback message on native
+  - **Text-to-Speech**: SpeechSynthesis API (web) / expo-speech (native)
+  - Pulsing mic button with "Listening..." indicator
+  - "Doctor speaking..." banner with stop button
+  - Auto-speaks responses when Voice Mode is ON
+- **Chat Features**: Streaming responses, message history, suggestion chips, new chat button
+- **API Endpoints**:
+  - `POST /api/conversations` - Create conversation
+  - `GET /api/conversations` - List conversations
+  - `GET /api/conversations/:id` - Get conversation with messages
+  - `POST /api/conversations/:id/messages` - Send message (SSE streaming)
+  - `DELETE /api/conversations/:id` - Delete conversation
+- **Language Support**: Responds in Hebrew when language param is "he"
 
 ### Internationalization (i18n)
 - Two languages: English (LTR) and Hebrew (RTL)
