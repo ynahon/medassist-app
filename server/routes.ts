@@ -7,6 +7,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import { eq } from "drizzle-orm";
 import documentRoutes, { getDocumentsForRecommendations } from "./documentRoutes";
 import heartRateRoutes from "./heartRateRoutes";
+import { registerChatRoutes } from "./replit_integrations/chat";
 import { getSystemPrompt, updateSystemPrompt, getAllSystemPrompts, seedDefaultPrompts, processPromptTemplate } from "./systemPrompts";
 import { storage, hashIdNumber, db } from "./storage";
 import { otpCodes, PromptType, PromptLanguage } from "../shared/schema";
@@ -30,7 +31,6 @@ const genAI = new GoogleGenerativeAI(apiKey);
 const geminiModel = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
 console.log("Key starting with:", apiKey.substring(0, 5) + "...");
-
 // Only initialize Twilio if credentials are configured
 const twilioEnabled = !!(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && process.env.TWILIO_PHONE_NUMBER);
 const twilioClient = twilioEnabled 
@@ -108,6 +108,8 @@ function normalizePhoneNumber(phone: string): string {
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  registerChatRoutes(app);
+
   app.get("/health", (_req, res) => {
     res.json({
       status: "ok",
