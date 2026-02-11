@@ -89,7 +89,10 @@ export function registerChatRoutes(app: Express): void {
 
       const chat = geminiModel.startChat({
         history: chatHistory,
-        systemInstruction: systemInstruction,
+        systemInstruction: {
+          role: "user",
+          parts: [{ text: systemInstruction }],
+        },
       });
 
       res.setHeader("Content-Type", "text/event-stream");
